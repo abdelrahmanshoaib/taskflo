@@ -124,6 +124,70 @@
     return { app: 'taskflo', version: 1, exportedAt: new Date().toISOString(), data: {} };
   }
 
+  // ─── Google sign-in (direct, via chrome.identity) ─────
+  // Needs in firebase-config.js: googleClientId (Web-type OAuth client),
+  // and in Google Cloud console: redirect URI https://<EXT_ID>.chromiumapp.org/
+  function googleErr(msg, redirect) {
+    msg = String(msg || '');
+    if (/redirect_uri_mismatch|redirect|400/i.test(msg)) {
+      return 'خطوة ناقصة: ضيف الرابط ده في Google Cloud → OAuth client → Authorized redirect URIs: ' + redirect;
+    }
+    if (/cancel|closed|abort/i.test(msg)) return 'اتلغى دخول جوجل';
+    return 'فشل دخول جوجل: ' + msg;
+  }
+  async function signInWithGoogle() {
+    const c = cfg();
+    if (!isConfigured()) throw new Error('كمل إعداد Firebase الأول (firebase-config.js)');
+    if (!c.googleClientId || c.googleClientId.indexOf('PASTE') === 0) {
+      throw new Error('حط الـ googleClientId في firebase-config.js الأول (ابعتهولي وأنا أحطه)');
+    }
+    const redirect = 'https://' + chrome.runtime.id + '.chromiumapp.org/';
+    const nonce = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth' +
+      '?client_id=' + encodeURIComponent(c.googleClientId) +
+      '&response_type=id_token' +
+      '&redirect_uri=' + encodeURIComponent(redirect) +
+      '&scope=' + encodeURIComponent('openid email profile') +
+      '&nonce=' + encodeURIComponent(nonce) +
+      '&prompt=select_account';
+    let redirectUrl;
+    try {
+      redirectUrl = await new Promise((resolve, reject) => {
+        try {
+          chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, (u) => {
+            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+            else resolve(u);
+          });
+        } catch (e) { reject(e); }
+      });
+    } catch (e) { throw new Error(googleErr(e.message, redirect)); }
+    const frag = String(redirectUrl || '').split('#')[1] || '';
+    const params = new URLSearchParams(frag);
+    if (params.get('error')) throw new Error(googleErr(params.get('error'), redirect));
+    const idToken = params.get('id_token');
+    if (!idToken) throw new Error('جوجل مرجعتش توكن — حاول تاني');
+    // Exchange Google ID token for a Firebase credential
+    const res = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=' + c.apiKey, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        postBody: 'id_token=' + idToken + '&providerId=google.com',
+        requestUri: redirect,
+        returnSecureToken: true,
+        returnIdpCredential: true
+      })
+    });
+    const j = await res.json();
+    if (!res.ok) {
+      const em = (j && j.error && j.error.message) || res.status;
+      if (/OPERATION_NOT_ALLOWED|provider.*disabled|not.*enabled/i.test(String(em))) {
+        throw new Error('فعّل Google provider في Firebase → Authentication → Add new provider → Google');
+      }
+      throw new Error('فشل ربط جوجل: ' + em);
+    }
+    return persistAuth(j, j.email);
+  }
+
   async function pushNow() {
     const s = await validSession();
     const b = collectLocal();
@@ -214,6 +278,6 @@
 
   window.TaskfloSync = {
     isConfigured, getSession, getPrefs, setPrefs,
-    signUp, signIn, signOut, pushNow, pullNow, schedulePush, syncOnStart
+    signUp, signIn, signInWithGoogle, signOut, pushNow, pullNow, schedulePush, syncOnStart
   };
 })();

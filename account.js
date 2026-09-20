@@ -69,6 +69,16 @@
       say('👋 خرجت — الداتا المحلية محفوظة على الجهاز');
       renderAccount();
     });
+    if ($('btnGoogle')) $('btnGoogle').addEventListener('click', async () => {
+      try {
+        say('⏳ جاري فتح دخول جوجل...');
+        await S.signInWithGoogle();
+        say('✅ نورت! جاري جلب نسختك ☁️⬇️');
+        try { await S.syncOnStart(); } catch (_) {}
+        if (typeof renderAll === 'function') renderAll();
+        renderAccount();
+      } catch (e) { say('❌ ' + e.message); }
+    });
     if ($('syncAuto')) $('syncAuto').addEventListener('change', async () => {
       const p = await S.getPrefs();
       p.auto = $('syncAuto').checked;

@@ -15,5 +15,9 @@
 window.TASKFLO_FIREBASE = {
   apiKey: 'AIzaSyA_5zBF9vTJcgIN2HA7eJsobFz23a7BqUo',
   authDomain: 'taskflow-ad5fe.firebaseapp.com',
-  projectId: 'taskflow-ad5fe'
+  projectId: 'taskflow-ad5fe',
+  // Google sign-in (Web-type OAuth client from Google Cloud → Credentials).
+  // Send the Client ID here and I'll wire it; redirect URI per device:
+  //   https://<EXTENSION_ID>.chromiumapp.org/  (find ID at chrome://extensions)
+  googleClientId: '24055935578-0hv7holkdff9iqov23cppfnh02802rvp.apps.googleusercontent.com'
 };

@@ -56,6 +56,21 @@ taskflo/
 5. حطهم في ملف `firebase-config.js` بدل القيم الـ placeholder
 6. اعمل Reload للإكستنشن من `chrome://extensions` → افتح تاب **حسابي** → اعمل حساب جديد بنفس الإيميل على كل أجهزتك ✅
 
+## دخول جوجل مباشر | Google sign-in (خطوة إضافية واحدة منك)
+
+> الزرار موجود في تاب **حسابي** (`🔵 دخول بجوجل مباشر`) — بس محتاج Client ID منك الأول:
+
+1. في Firebase: `Authentication → Add new provider → Google → Enable` (اختار support email) → Save
+2. افتح [Google Cloud Console](https://console.cloud.google.com) على نفس المشروع (`taskflow-ad5fe`) → `APIs & Services → Credentials → Create Credentials → OAuth client ID`
+3. اختار النوع **Web application** وسمّيه `taskflo-ext`
+4. تحت **Authorized redirect URIs** ضيف الرابط ده (هات الـ ID من `chrome://extensions` تحت اسم TaskFlow Pro):
+   ```
+   https://<EXTENSION_ID>.chromiumapp.org/
+   ```
+   مثال: `https://abcdefghijklmnopabcdefghijklmnop.chromiumapp.org/`
+5. دوس Create وانسخ الـ **Client ID** وابعتهولي — أحطه في `firebase-config.js` وأعمل push
+6. على أي جهاز تاني: نفس الـ Client شغال، بس ضيف الـ redirect URI بتاع الـ extension ID بتاع الجهاز ده (Edit على نفس الـ client → Add URI → Save) — مرة واحدة لكل جهاز
+
 ## التشغيل محلياً | Run locally
 
 1. افتح `chrome://extensions` وفعّل `Developer mode`
