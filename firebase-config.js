@@ -13,7 +13,7 @@
 //      }
 // 4) Project Settings → General → Your apps → Web app (</>) → copy apiKey/authDomain/projectId here.
 window.TASKFLO_FIREBASE = {
-  apiKey: 'PASTE_YOUR_API_KEY_HERE',
-  authDomain: 'YOUR_PROJECT.firebaseapp.com',
-  projectId: 'YOUR_PROJECT_ID'
+  apiKey: 'AIzaSyA_5zBF9vTJcgIN2HA7eJsobFz23a7BqUo',
+  authDomain: 'taskflow-ad5fe.firebaseapp.com',
+  projectId: 'taskflow-ad5fe'
 };
