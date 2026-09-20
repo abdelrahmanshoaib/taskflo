@@ -928,6 +928,10 @@
     <div class="section-label">☁️ الحساب والمزامنة</div>
     <div class="acc-status" id="accStatus">☁️ جاري التحقق...</div>
     <div class="acc-hint" id="firebaseHint" style="display:none">⚠️ اللوجن محتاج إعداد Firebase مرة واحدة: افتح ملف <b>firebase-config.js</b> وحط الـ apiKey والـ projectId (الخطوات مكتوبة فوق الملف). الاستيراد/التصدير شغال من غير إعداد.</div>
+    <div class="acc-row" style="align-items:center">
+      <span class="acc-status" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" dir="ltr" id="redirectUriLabel" title="رابط الـ redirect للجهاز ده"></span>
+      <button class="mini-btn" id="btnCopyRedirect" title="انسخ رابط الـ redirect وحطه في Google Cloud">📋 رابط الجهاز</button>
+    </div>
     <div id="accFormWrap" style="display:flex;flex-direction:column;gap:8px">
       <div class="acc-row">
         <input class="form-input" id="accEmail" type="email" placeholder="الإيميل" dir="ltr" />

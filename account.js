@@ -30,10 +30,17 @@
         ? ('آخر مزامنة: ' + prefs.lastSyncAt.slice(0, 16).replace('T', ' ') + (prefs.lastDir === 'up' ? ' ⬆️' : prefs.lastDir === 'down' ? ' ⬇️' : ''))
         : 'لسه مفيش مزامنة';
     }
+    // Show this device's exact redirect URI (copy-paste into Google Cloud)
+    if ($('redirectUriLabel')) $('redirectUriLabel').textContent = deviceRedirect();
   }
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function deviceRedirect() {
+    try { return 'https://' + chrome.runtime.id + '.chromiumapp.org/'; }
+    catch (_) { return ''; }
   }
 
   function bindOnce() {
@@ -138,6 +145,12 @@
         const obj = JSON.parse(t);
         B.applyBackup(obj, {}, (e2) => say(e2 ? '❌ ' + e2 : '✅ اتستوردت النسخة الملصوقة 🎉'));
       } catch (e) { say('❌ النص مش JSON صالح'); }
+    });
+    if ($('btnCopyRedirect')) $('btnCopyRedirect').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(deviceRedirect());
+        say('📋 اتنسخ رابط الجهاز — الصقه في Google Cloud بدل السطر القديم');
+      } catch (e) { say('❌ فشل النسخ: ' + e.message); }
     });
   }
 
