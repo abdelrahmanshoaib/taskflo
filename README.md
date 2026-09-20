@@ -1,6 +1,6 @@
-# TaskFlow Pro v2.2 — تصميم زجاجي + تخصيص كامل + إنتاجية متكاملة
+# TaskFlow Pro v2.4 — حساب سحابي + مزامنة + نسخ احتياطي
 
-> Chrome Extension (Manifest V3) — عربي RTL — يعمل 100% محلياً بدون سيرفر.
+> Chrome Extension (Manifest V3) — عربي RTL — محلي أولاً، مع مزامنة سحابية اختيارية عبر Firebase.
 
 > Tasks + projects + routines + calendar + goals + pomodoro — Arabic RTL Chrome Extension, fully local, no backend.
 
@@ -17,16 +17,44 @@
 - 🍅 بومودورو: مدد مخصصة + ربط بمهمة + سجل + تحليل 7 أيام + تعافي بعد القفل + انتقال تلقائي
 - 🌙 دارك مود محفوظ + تخزين `chrome.storage.local` + ترحيل غير مُتلف للداتا القديمة + حماية XSS عبر `escHtml`
 - ✨ هوية زجاجية Glassmorphism + تخصيص كامل: 6 ألوان تمييز + فاتح/داكن + زجاجي/مسطّح + كثافة مريحة/مضغوطة (⚙️ من الهيدر)
+- ☁️ حساب (إيميل/كلمة سر عبر Firebase) + مزامنة تلقائية بين الأجهزة (رفع/تنزيل + last-write-wins)
+- 💾 نسخة احتياطية: تحميل ملف JSON + نسخ/لصق + استيراد من ملف (شغالة بدون أي إعداد)
 
 ## التركيب | Structure
 
 ```
 taskflo/
-├── manifest.json      # MV3 — popup + service_worker + permissions
-├── popup.html         # UI + CSS + JS (الواجهة كاملة inline)
+├── manifest.json      # MV3 — popup + service_worker + permissions + firebase hosts
+├── popup.html         # UI (تاب حسابي + نسخ احتياطي)
+├── popup.js           # منطق التطبيق (save يدفع مزامنة تلقائية)
+├── firebase-config.js # إعداد Firebase (تحط مفاتيحك هنا مرة واحدة)
+├── sync.js            # مزامنة Firebase REST بدون SDK (MV3-safe)
+├── backup.js          # تجميع/تطبيق/تصدير/استيراد النسخة
+├── account.js         # واجهة الحساب والنسخ الاحتياطي
 ├── background.js      # Service Worker — alarms + notifications
 └── icons/             # icon16/32/48/128.png
 ```
+
+## الحساب السحابي | Cloud setup (مرة واحدة، ~5 دقائق)
+
+> بدون الخطوات دي: الاستيراد/التصدير شغال عادي، واللوجن هيعرض تنبيه الإعداد.
+
+1. افتح https://console.firebase.google.com واعمل مشروع (مثال: `taskflo-app`)
+2. `Build → Authentication → Sign-in method` وفعّل **Email/Password**
+3. `Build → Firestore Database → Create database` ثم حط القواعد دي (داتا كل يوزر خاصة بيه فقط):
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{db}/documents {
+       match /users/{userId}/{doc=**} {
+         allow read, write: if request.auth != null && request.auth.uid == userId;
+       }
+     }
+   }
+   ```
+4. `Project Settings → General → Your apps → </> Web` وانسخ `apiKey` و `authDomain` و `projectId`
+5. حطهم في ملف `firebase-config.js` بدل القيم الـ placeholder
+6. اعمل Reload للإكستنشن من `chrome://extensions` → افتح تاب **حسابي** → اعمل حساب جديد بنفس الإيميل على كل أجهزتك ✅
 
 ## التشغيل محلياً | Run locally
 
@@ -45,5 +73,5 @@ taskflo/
 - [x] إصلاح حفظ التعديل + مسح `break_end` + عدّاد الجلسات + اتجاه الرينج + حفظ الثيم
 - [x] بحث + فلاتر متقدمة + أرشفة + تكرار المهام
 - [x] داشبورد + تقويم + أهداف + روتين + بومودورو مطوّر
+- [x] حساب سحابي Firebase + مزامنة تلقائية + نسخ احتياطي (ملف + نسخ/لصق)
 - [ ] Drag-and-drop للتقويم + Timeline للمشاريع
-- [ ] مزامنة `chrome.storage.sync`

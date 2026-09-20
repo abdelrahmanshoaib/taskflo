@@ -52,6 +52,8 @@ function save() {
       pomoTaskId, pomoState
     });
   } catch(e) { /* dev fallback */ persistDev(); }
+  // v2.4: schedule cloud push (debounced, silent if logged out)
+  try { if (window.TaskfloSync) window.TaskfloSync.schedulePush(); } catch (_) {}
 }
 function persistDev() {
   try {
@@ -158,6 +160,7 @@ document.querySelectorAll('.tab').forEach(t => {
     if (t.dataset.tab === 'calendar') renderCalendar();
     if (t.dataset.tab === 'goals') renderGoals();
     if (t.dataset.tab === 'pomodoro') renderPomoExtras();
+    if (t.dataset.tab === 'account' && typeof renderAccount === 'function') renderAccount();
   });
 });
 // Global keyboard shortcuts: / search, n new task, Esc close
@@ -1981,5 +1984,7 @@ function init() {
   updateStats();
   renderDashboard();
   renderTasks();
+  // v2.4: account panel + cloud auto-sync (after local data ready)
+  try { if (typeof TaskfloAccountInit === 'function') TaskfloAccountInit(); else if (window.TaskfloAccountInit) window.TaskfloAccountInit(); } catch (_) {}
 }
 load(init);
