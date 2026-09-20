@@ -1,16 +1,21 @@
-# TaskFlow Pro — منظم مهام + مشاريع + تذكيرات + بومودورو
+# TaskFlow Pro v2.1 — مهام + مشاريع + روتين + تقويم + أهداف + بومودورو
 
 > Chrome Extension (Manifest V3) — عربي RTL — يعمل 100% محلياً بدون سيرفر.
 
-> Task manager + projects + reminders + pomodoro — Arabic RTL Chrome Extension, fully local, no backend.
+> Tasks + projects + routines + calendar + goals + pomodoro — Arabic RTL Chrome Extension, fully local, no backend.
+
+> ⚠️ ملاحظة: صفحة GitHub تعرض الكود فقط ولا تشغّل التطبيق — للتشغيل ثبّته كإكستنشن من `chrome://extensions` عبر `Load unpacked`.
 
 ## المميزات | Features
 
-- ✅ مهام: إضافة سريعة + مودال كامل (مشروع / أولوية / تاريخ / تذكير / ملاحظة) + فلترة + تنجيز + تعديل + حذف
-- 📋 جدول مضغوط مرتب (غير المنجز أولاً ثم حسب التاريخ)
-- 📁 مشاريع مع نسبة إنجاز و Progress Bar
-- 🍅 بومودورو (عمل 25د / استراحة 5د / كبيرة 15د) مع حلقة SVG وإحصائيات وإشعارات حتى بعد قفل الـ popup
-- 🌙 دارك مود + تخزين `chrome.storage.local` + حماية XSS عبر `escHtml`
+- 🏠 داشبورد اليوم: مهام اليوم + متأخرة + خطة Must/Should/Could/Scheduled + مواعيد + مشاريع نشطة
+- ✅ مهام: وصف + حالة (4) + أولوية (4) + وسوم + مهام فرعية + مدة مقدرة/فعلية + تكرار + سجل نشاط + بحث + فلاتر + تكرار نسخ + أرشفة + غفوة
+- 🔁 روتين: يومي/أسبوعي/شهري/كل N يوم + توليد تلقائي بدون duplicate + إيقاف/تخطي + streak 🔥
+- 📋 جدول مضغوط مرتب + 📁 مشاريع (وصف/deadline + kanban-mini + قوالب جاهزة)
+- 📅 تقويم (يوم/أسبوع/شهر) + مواعيد + Time Blocking بدون مهام مكررة
+- 🎯 أهداف بمراحل وتقدم تلقائي + ✨ مسودة ذكية (محلية، مراجعة قبل الحفظ)
+- 🍅 بومودورو: مدد مخصصة + ربط بمهمة + سجل + تحليل 7 أيام + تعافي بعد القفل + انتقال تلقائي
+- 🌙 دارك مود محفوظ + تخزين `chrome.storage.local` + ترحيل غير مُتلف للداتا القديمة + حماية XSS عبر `escHtml`
 
 ## التركيب | Structure
 
@@ -30,13 +35,14 @@ taskflo/
 
 ## التطوير | Development
 
-- لا تشغّل سيرفر — Extension纯 أمامي، عدّل `popup.html` / `background.js` ثم `Reload` من صفحة الإكستنشن.
-- البيانات محفوظة في `chrome.storage.local`: `tasks / projects / pomoStats`.
-- الـ fallback لـ `localStorage` للتجربة كصفحة ويب عادية فقط.
+- البيانات محفوظة في `chrome.storage.local`: `tasks / projects / routines / appointments / goals / focusSessions / settings`.
+- الـ fallback لـ `localStorage` للتجربة كصفحة ويب عادية فقط (بدون منبهات).
+- الترحيل additive فقط: `migrate()` يضيف الحقول الناقصة ولا يحذف أي داتا قديمة.
 
-## خارطة الطريق | Roadmap
+## خارطة الطريق | Roadmap (تم ✅ / قادم ⏳)
 
-- [ ] إصلاح حفظ التعديل (edit لا يعمل `save()` ولا يحدّث الـ alarm)
-- [ ] إصلاح مسح `break_end` عند الإيقاف/إعادة البومودورو
-- [ ] إصلاح عدّاد جلسات البداية (0 يعرض 4 dots)
-- [ ] بحث في المهام + حفظ الثيم + مزامنة `chrome.storage.sync`
+- [x] إصلاح حفظ التعديل + مسح `break_end` + عدّاد الجلسات + اتجاه الرينج + حفظ الثيم
+- [x] بحث + فلاتر متقدمة + أرشفة + تكرار المهام
+- [x] داشبورد + تقويم + أهداف + روتين + بومودورو مطوّر
+- [ ] Drag-and-drop للتقويم + Timeline للمشاريع
+- [ ] مزامنة `chrome.storage.sync`

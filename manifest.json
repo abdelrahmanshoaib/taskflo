@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "TaskFlow Pro",
-  "version": "1.0.0",
-  "description": "منظم مهام + مشاريع + تذكيرات + بومودورو",
+  "version": "2.0.0",
+  "description": "TaskFlow Pro v2 — مهام + مشاريع + تقويم + أهداف + بومودورو",
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

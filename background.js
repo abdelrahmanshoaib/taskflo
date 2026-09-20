@@ -1,41 +1,85 @@
+// TaskFlow Pro v2 — background service worker
+// Backward-compatible: keeps reminder_/pomodoro_end/break_end protocol.
+// Adds: appt_ alarms, goal_ alarms, overdue_sweep, SNOOZE.
+
+function notify(id, title, message) {
+  try {
+    chrome.notifications.create(id, {
+      type: 'basic',
+      iconUrl: 'icons/icon48.png',
+      title, message, priority: 2
+    });
+  } catch (e) { /* icons missing in dev */ }
+}
+
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name.startsWith('reminder_')) {
     const taskId = alarm.name.replace('reminder_', '');
     chrome.storage.local.get(['tasks'], (result) => {
       const tasks = result.tasks || [];
-      const task = tasks.find(t => t.id == taskId);
-      if (task) {
-        chrome.notifications.create({
-          type: 'basic',
-          iconUrl: 'icons/icon48.png',
-          title: '⏰ تذكير: ' + task.title,
-          message: task.project ? 'المشروع: ' + task.project : 'حان وقت المهمة!',
-          priority: 2
-        });
+      const task = tasks.find(t => String(t.id) === String(taskId));
+      if (task && !task.done && !task.archived) {
+        notify('reminder_' + taskId,
+          '⏰ تذكير: ' + task.title,
+          task.project ? 'المشروع: ' + task.project : 'حان وقت المهمة!');
       }
     });
-  } else if (alarm.name === 'pomodoro_end') {
-    chrome.notifications.create({
-      type: 'basic', iconUrl: 'icons/icon48.png',
-      title: '🍅 انتهى البومودورو!',
-      message: 'أحسنت! حان وقت الراحة.', priority: 2
+  } else if (alarm.name.startsWith('appt_')) {
+    const apptId = alarm.name.replace('appt_', '');
+    chrome.storage.local.get(['appointments'], (result) => {
+      const appts = result.appointments || [];
+      const a = appts.find(x => String(x.id) === String(apptId));
+      if (a) {
+        const when = a.start ? new Date(a.start).toLocaleString('ar-EG', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+        notify('appt_' + apptId,
+          '📅 موعد: ' + a.title,
+          (when ? when + ' — ' : '') + (a.location || a.project || 'حان الموعد!'));
+      }
     });
+  } else if (alarm.name.startsWith('goal_')) {
+    const goalId = alarm.name.replace('goal_', '');
+    chrome.storage.local.get(['goals'], (result) => {
+      const goals = result.goals || [];
+      const g = goals.find(x => String(x.id) === String(goalId));
+      if (g && !g.done) notify('goal_' + goalId, '🎯 تذكير بالهدف: ' + g.title, 'الموعد المستهدف: ' + (g.targetDate || '—'));
+    });
+  } else if (alarm.name === 'pomodoro_end') {
+    notify('pomo', '🍅 انتهت جلسة التركيز!', 'أحسنت! سُجّل وقتك، وخذ استراحة.');
   } else if (alarm.name === 'break_end') {
-    chrome.notifications.create({
-      type: 'basic', iconUrl: 'icons/icon48.png',
-      title: '⚡ انتهت الاستراحة!',
-      message: 'هيا نعمل مجددًا!', priority: 2
+    notify('brk', '⚡ انتهت الاستراحة!', 'هيا نعمل مجددًا!');
+  } else if (alarm.name === 'overdue_sweep') {
+    chrome.storage.local.get(['tasks', 'settings'], (result) => {
+      const tasks = result.tasks || [];
+      const settings = result.settings || {};
+      if (settings.overdueNotify === false) return;
+      const today = new Date().toISOString().slice(0, 10);
+      const n = tasks.filter(t => !t.done && !t.archived && t.due && t.due < today).length;
+      if (n > 0) notify('overdue', '⚠️ مهام متأخرة (' + n + ')', 'راجع لوحة اليوم لتخطيط مهامك.');
     });
   }
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type === 'SET_ALARM') {
-    chrome.alarms.create(msg.name, { when: msg.when });
-    sendResponse({ ok: true });
-  } else if (msg.type === 'CLEAR_ALARM') {
-    chrome.alarms.clear(msg.name);
-    sendResponse({ ok: true });
-  }
+  try {
+    if (msg.type === 'SET_ALARM') {
+      chrome.alarms.create(msg.name, { when: msg.when });
+      sendResponse({ ok: true });
+    } else if (msg.type === 'CLEAR_ALARM') {
+      chrome.alarms.clear(msg.name);
+      sendResponse({ ok: true });
+    } else if (msg.type === 'SNOOZE') {
+      // Re-schedule an existing alarm N minutes later
+      const mins = Math.max(1, Number(msg.minutes) || 10);
+      chrome.alarms.create(msg.name, { when: Date.now() + mins * 60000 });
+      sendResponse({ ok: true });
+    }
+  } catch (e) { try { sendResponse({ ok: false }); } catch (_) {} }
   return true;
+});
+
+chrome.runtime.onInstalled.addListener(() => {
+  // Daily overdue check at ~09:00 local: use periodInMinutes fallback (MV3 SW has no daily exact)
+  try {
+    chrome.alarms.create('overdue_sweep', { periodInMinutes: 12 * 60 });
+  } catch (e) {}
 });
