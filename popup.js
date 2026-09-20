@@ -90,6 +90,7 @@ function migrate() {
   if (!Array.isArray(routines)) routines = [];
   if (!Array.isArray(focusSessions)) focusSessions = [];
   settings = Object.assign({ dark: false, work: 25, short: 5, long: 15, auto: false, sound: true, overdueNotify: true }, settings || {});
+  settings.ui = Object.assign({ accent: 'teal', mode: 'light', glass: 'on', density: 'comfortable' }, settings.ui || {});
 }
 function load(cb) {
   try {
@@ -144,7 +145,7 @@ document.querySelectorAll('.tab').forEach(t => {
 });
 // Global keyboard shortcuts: / search, n new task, Esc close
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModal(); closeApptModal(); }
+  if (e.key === 'Escape') { closeModal(); closeApptModal(); closeSettings(); }
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
   if (e.key === '/') { e.preventDefault(); switchTab('tasks'); const s = document.getElementById('searchInput'); if (s) s.focus(); }
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openModal(); }
@@ -164,12 +165,59 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
 }
 
-// ─── Theme (persisted) ─────────────────────────────────
+// ─── Theme + customization (persisted) ────────────────
 function applyTheme() { document.body.toggleAttribute('data-dark', isDark); }
-document.getElementById('btnTheme').addEventListener('click', () => {
-  isDark = !isDark;
+function applyUI() {
+  const ui = settings.ui || {};
+  isDark = ui.mode === 'dark';
   settings.dark = isDark;
-  applyTheme(); save();
+  applyTheme();
+  document.body.setAttribute('data-accent', ui.accent || 'teal');
+  document.body.setAttribute('data-glass', ui.glass || 'on');
+  document.body.setAttribute('data-density', ui.density || 'comfortable');
+  document.querySelectorAll('#accentRow .swatch').forEach(s => s.classList.toggle('active', s.dataset.accent === (ui.accent || 'teal')));
+  document.querySelectorAll('#modeRow .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === (ui.mode || 'light')));
+  document.querySelectorAll('#glassRow .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.glass === (ui.glass || 'on')));
+  document.querySelectorAll('#densityRow .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.density === (ui.density || 'comfortable')));
+}
+document.getElementById('btnTheme').addEventListener('click', () => {
+  settings.ui = settings.ui || {};
+  settings.ui.mode = isDark ? 'light' : 'dark';
+  applyUI(); save();
+  toast(isDark ? '🌙 الوضع الداكن' : '☀️ الوضع الفاتح');
+});
+// Customization modal
+function openSettings() {
+  applyUI();
+  document.getElementById('settingsModal').classList.add('open');
+}
+function closeSettings() { document.getElementById('settingsModal').classList.remove('open'); }
+document.getElementById('btnSettings').addEventListener('click', openSettings);
+document.getElementById('settingsClose').addEventListener('click', closeSettings);
+document.getElementById('settingsModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeSettings(); });
+document.getElementById('accentRow').addEventListener('click', e => {
+  const b = e.target.closest('.swatch');
+  if (!b) return;
+  settings.ui.accent = b.dataset.accent;
+  applyUI(); save();
+});
+document.getElementById('modeRow').addEventListener('click', e => {
+  const b = e.target.closest('.seg-btn');
+  if (!b) return;
+  settings.ui.mode = b.dataset.mode;
+  applyUI(); save();
+});
+document.getElementById('glassRow').addEventListener('click', e => {
+  const b = e.target.closest('.seg-btn');
+  if (!b) return;
+  settings.ui.glass = b.dataset.glass;
+  applyUI(); save();
+});
+document.getElementById('densityRow').addEventListener('click', e => {
+  const b = e.target.closest('.seg-btn');
+  if (!b) return;
+  settings.ui.density = b.dataset.density;
+  applyUI(); save();
 });
 
 // ─── Filter chips (original behavior kept) ─────────────
@@ -1642,7 +1690,7 @@ function renderPomoExtras() {
 
 // ─── Init ─────────────────────────────────────────────
 function init() {
-  applyTheme();
+  applyUI();
   bindPomoSettings();
   refreshTemplateSelect();
   refreshFilterProjects();
