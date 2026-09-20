@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TaskFlow Pro</title>
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f6f2; --surface: #f9f8f5; --surface2: #ffffff;
+    --border: rgba(40,37,29,0.12); --text: #28251d; --muted: #7a7974;
+    --faint: #bab9b4; --primary: #01696f; --primary-h: #0c4e54;
+    --primary-hi: #cedcd8; --success: #437a22; --warning: #da7101;
+    --error: #a12c7b; --radius: 8px; --radius-lg: 12px;
+    --shadow: 0 2px 8px rgba(40,37,29,0.08);
+    --transition: 180ms cubic-bezier(0.16,1,0.3,1);
+    --font: 'Satoshi', 'Segoe UI', sans-serif;
+  }
+  [data-dark] {
+    --bg: #171614; --surface: #1c1b19; --surface2: #201f1d;
+    --border: rgba(205,204,202,0.1); --text: #cdccca; --muted: #797876;
+    --faint: #5a5957; --primary: #4f98a3; --primary-h: #227f8b;
+    --primary-hi: #313b3b; --success: #6daa45; --warning: #fdab43;
+    --error: #d163a7;
+    --shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 420px; min-height: 560px; max-height: 620px;
+    font-family: var(--font); font-size: 14px; color: var(--text);
+    background: var(--bg); overflow: hidden; display: flex; flex-direction: column;
+  }
+  button { cursor: pointer; border: none; background: none; font-family: var(--font); }
+
+  /* ── Header ── */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px 10px; background: var(--surface);
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .logo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; }
+  .logo svg { color: var(--primary); }
+  .header-actions { display: flex; gap: 6px; }
+  .icon-btn {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); transition: background var(--transition), color var(--transition);
+  }
+  .icon-btn:hover { background: var(--primary-hi); color: var(--primary); }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex; background: var(--surface);
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .tab {
+    flex: 1; padding: 9px 4px; font-size: 12px; font-weight: 500;
+    color: var(--muted); border-bottom: 2px solid transparent;
+    transition: color var(--transition), border-color var(--transition);
+    text-align: center;
+  }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  /* ── Main scroll area ── */
+  .panel { display: none; flex: 1; overflow-y: auto; padding: 14px 16px; }
+  .panel.active { display: flex; flex-direction: column; gap: 12px; }
+
+  /* ── Add task bar ── */
+  .add-bar {
+    display: flex; gap: 8px; align-items: center;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 8px 12px;
+    box-shadow: var(--shadow);
+  }
+  .add-bar input {
+    flex: 1; border: none; background: transparent; font-size: 13px;
+    color: var(--text); outline: none; font-family: var(--font);
+  }
+  .add-bar input::placeholder { color: var(--faint); }
+  .btn-add {
+    background: var(--primary); color: white; border-radius: 6px;
+    padding: 5px 12px; font-size: 12px; font-weight: 600;
+    transition: background var(--transition);
+    white-space: nowrap;
+  }
+  .btn-add:hover { background: var(--primary-h); }
+
+  /* ── Filter row ── */
+  .filter-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-chip {
+    padding: 4px 10px; border-radius: 99px; font-size: 11px; font-weight: 500;
+    border: 1px solid var(--border); color: var(--muted);
+    background: var(--surface2); transition: all var(--transition);
+    cursor: pointer;
+  }
+  .filter-chip.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+  /* ── Task item ── */
+  .task-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 10px 12px;
+    box-shadow: var(--shadow); transition: box-shadow var(--transition);
+    position: relative;
+  }
+  .task-item:hover { box-shadow: 0 4px 16px rgba(40,37,29,0.1); }
+  .task-item.done .task-title { text-decoration: line-through; color: var(--faint); }
+  .task-check {
+    width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border);
+    flex-shrink: 0; margin-top: 2px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background var(--transition), border-color var(--transition);
+  }
+  .task-item.done .task-check { background: var(--success); border-color: var(--success); }
+  .task-body { flex: 1; min-width: 0; }
+  .task-title { font-size: 13px; font-weight: 500; line-height: 1.4; word-break: break-word; }
+  .task-meta { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; align-items: center; }
+  .badge {
+    padding: 2px 7px; border-radius: 99px; font-size: 10px; font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .badge-project { background: var(--primary-hi); color: var(--primary); }
+  .badge-due { background: #fff3e6; color: var(--warning); }
+  [data-dark] .badge-due { background: #3a2c1a; }
+  .badge-high { background: #fce4f0; color: var(--error); }
+  [data-dark] .badge-high { background: #3a1f2e; }
+  .task-actions { display: flex; gap: 4px; opacity: 0; transition: opacity var(--transition); }
+  .task-item:hover .task-actions { opacity: 1; }
+  .task-act-btn {
+    width: 26px; height: 26px; border-radius: 6px; display: flex;
+    align-items: center; justify-content: center; color: var(--muted);
+    transition: background var(--transition), color var(--transition);
+  }
+  .task-act-btn:hover { background: var(--primary-hi); color: var(--primary); }
+  .task-act-btn.del:hover { background: #fce4f0; color: var(--error); }
+
+  /* ── Section label ── */
+  .section-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.8px; color: var(--muted); padding: 2px 0;
+  }
+
+  /* ── Projects panel ── */
+  .project-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 12px 14px;
+    box-shadow: var(--shadow);
+  }
+  .project-header { display: flex; align-items: center; justify-content: space-between; }
+  .project-name { font-size: 13px; font-weight: 700; }
+  .project-count { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .project-bar-bg {
+    height: 4px; background: var(--border); border-radius: 99px; margin-top: 8px;
+  }
+  .project-bar-fill {
+    height: 4px; background: var(--primary); border-radius: 99px;
+    transition: width 0.5s ease;
+  }
+  .add-project-form {
+    display: flex; gap: 8px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 10px 12px;
+  }
+  .add-project-form input {
+    flex: 1; border: none; background: transparent; font-size: 13px;
+    color: var(--text); outline: none; font-family: var(--font);
+  }
+
+  /* ── Table panel ── */
+  .task-table {
+    border: 1px solid var(--border); border-radius: var(--radius-lg);
+    overflow: hidden; background: var(--surface2);
+  }
+  .table-head {
+    display: grid; grid-template-columns: 1fr 80px 70px 30px;
+    gap: 8px; padding: 8px 12px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--muted);
+  }
+  .table-row {
+    display: grid; grid-template-columns: 1fr 80px 70px 30px;
+    gap: 8px; padding: 8px 12px; font-size: 12px;
+    border-bottom: 1px solid var(--border); align-items: center;
+    transition: background var(--transition);
+  }
+  .table-row:last-child { border-bottom: none; }
+  .table-row:hover { background: var(--primary-hi); }
+  .table-row.done-row .tr-title { text-decoration: line-through; color: var(--faint); }
+  .tr-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-left: 4px;
+  }
+
+  /* ── Pomodoro ── */
+  .pomo-container {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 16px; padding: 8px 0;
+  }
+  .pomo-ring {
+    position: relative; width: 160px; height: 160px;
+  }
+  .pomo-ring svg { transform: rotate(-90deg); }
+  .pomo-ring circle { fill: none; stroke-width: 8; }
+  .pomo-track { stroke: var(--border); }
+  .pomo-progress {
+    stroke: var(--primary); stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear;
+  }
+  .pomo-time-display {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    text-align: center;
+  }
+  .pomo-time {
+    font-size: 36px; font-weight: 700; font-variant-numeric: tabular-nums;
+    color: var(--text); line-height: 1;
+  }
+  .pomo-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .pomo-controls { display: flex; gap: 10px; }
+  .pomo-btn {
+    padding: 9px 22px; border-radius: 99px; font-size: 13px; font-weight: 600;
+    transition: background var(--transition), transform var(--transition);
+  }
+  .pomo-btn:active { transform: scale(0.97); }
+  .pomo-btn.primary { background: var(--primary); color: white; }
+  .pomo-btn.primary:hover { background: var(--primary-h); }
+  .pomo-btn.secondary {
+    background: var(--surface2); color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .pomo-btn.secondary:hover { background: var(--primary-hi); color: var(--primary); }
+  .pomo-mode-row { display: flex; gap: 8px; }
+  .pomo-mode-btn {
+    flex: 1; padding: 6px; border-radius: 8px; font-size: 11px; font-weight: 600;
+    border: 1px solid var(--border); color: var(--muted); background: var(--surface2);
+    text-align: center; transition: all var(--transition);
+  }
+  .pomo-mode-btn.active {
+    background: var(--primary); color: white; border-color: var(--primary);
+  }
+  .pomo-sessions { display: flex; gap: 6px; align-items: center; }
+  .session-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--border); transition: background 0.3s;
+  }
+  .session-dot.done { background: var(--primary); }
+  .pomo-stats {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%;
+  }
+  .pomo-stat {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px 12px; text-align: center;
+  }
+  .pomo-stat-val { font-size: 22px; font-weight: 700; color: var(--primary); }
+  .pomo-stat-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Add task modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(40,37,29,0.4);
+    display: none; align-items: center; justify-content: center;
+    z-index: 100; backdrop-filter: blur(2px);
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface2); border-radius: var(--radius-lg);
+    padding: 20px; width: 360px; box-shadow: 0 20px 60px rgba(40,37,29,0.2);
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .modal-title { font-size: 15px; font-weight: 700; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .form-input, .form-select {
+    padding: 8px 10px; border-radius: var(--radius); border: 1px solid var(--border);
+    background: var(--surface); font-size: 13px; color: var(--text);
+    font-family: var(--font); outline: none;
+    transition: border-color var(--transition);
+  }
+  .form-input:focus, .form-select:focus { border-color: var(--primary); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .btn-cancel {
+    padding: 8px 16px; border-radius: var(--radius); font-size: 13px;
+    border: 1px solid var(--border); color: var(--muted);
+    transition: background var(--transition);
+  }
+  .btn-cancel:hover { background: var(--surface); }
+  .btn-save {
+    padding: 8px 16px; border-radius: var(--radius); font-size: 13px;
+    font-weight: 600; background: var(--primary); color: white;
+    transition: background var(--transition);
+  }
+  .btn-save:hover { background: var(--primary-h); }
+
+  /* ── Scrollbar ── */
+  .panel::-webkit-scrollbar { width: 4px; }
+  .panel::-webkit-scrollbar-track { background: transparent; }
+  .panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+  /* ── Empty state ── */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 32px 16px; color: var(--muted); text-align: center; gap: 8px;
+  }
+  .empty-state svg { color: var(--faint); margin-bottom: 4px; }
+  .empty-state p { font-size: 12px; max-width: 24ch; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="logo">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+    </svg>
+    TaskFlow Pro
+  </div>
+  <div class="header-actions">
+    <button class="icon-btn" id="btnTheme" title="تغيير المظهر">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+    <button class="icon-btn" id="btnAddTask" title="مهمة جديدة">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab active" data-tab="tasks">✅ المهام</button>
+  <button class="tab" data-tab="table">📋 الجدول</button>
+  <button class="tab" data-tab="projects">📁 المشاريع</button>
+  <button class="tab" data-tab="pomodoro">🍅 بومودورو</button>
+</div>
+
+<!-- ── TASKS PANEL ── -->
+<div class="panel active" id="panel-tasks">
+  <div class="add-bar">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--faint);flex-shrink:0"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    <input type="text" id="quickAdd" placeholder="أضف مهمة سريعة..." />
+    <button class="btn-add" id="quickAddBtn">إضافة</button>
+  </div>
+
+  <div class="filter-row" id="filterRow">
+    <button class="filter-chip active" data-filter="all">الكل</button>
+    <button class="filter-chip" data-filter="active">نشطة</button>
+    <button class="filter-chip" data-filter="done">منجزة</button>
+    <button class="filter-chip" data-filter="high">أولوية</button>
+  </div>
+
+  <div id="tasksList"></div>
+</div>
+
+<!-- ── TABLE PANEL ── -->
+<div class="panel" id="panel-table">
+  <div class="task-table">
+    <div class="table-head">
+      <span>المهمة</span><span>المشروع</span><span>التاريخ</span><span></span>
+    </div>
+    <div id="tableBody"></div>
+  </div>
+</div>
+
+<!-- ── PROJECTS PANEL ── -->
+<div class="panel" id="panel-projects">
+  <div class="add-project-form">
+    <input type="text" id="newProjectName" placeholder="اسم المشروع الجديد..." />
+    <button class="btn-add" id="addProjectBtn">إنشاء</button>
+  </div>
+  <div id="projectsList"></div>
+</div>
+
+<!-- ── POMODORO PANEL ── -->
+<div class="panel" id="panel-pomodoro">
+  <div class="pomo-container">
+    <div class="pomo-mode-row" style="width:100%">
+      <button class="pomo-mode-btn active" data-mode="work">🍅 عمل (25د)</button>
+      <button class="pomo-mode-btn" data-mode="short">☕ استراحة (5د)</button>
+      <button class="pomo-mode-btn" data-mode="long">🛌 كبيرة (15د)</button>
+    </div>
+
+    <div class="pomo-ring">
+      <svg width="160" height="160" viewBox="0 0 160 160">
+        <circle class="pomo-track" cx="80" cy="80" r="68"/>
+        <circle class="pomo-progress" id="pomoProgress" cx="80" cy="80" r="68"
+          stroke-dasharray="427" stroke-dashoffset="0"/>
+      </svg>
+      <div class="pomo-time-display">
+        <div class="pomo-time" id="pomoTime">25:00</div>
+        <div class="pomo-label" id="pomoLabel">وقت العمل</div>
+      </div>
+    </div>
+
+    <div class="pomo-sessions" id="pomoSessions">
+      <span style="font-size:11px;color:var(--muted);margin-left:8px">الجلسات:</span>
+    </div>
+
+    <div class="pomo-controls">
+      <button class="pomo-btn primary" id="pomoStart">▶ ابدأ</button>
+      <button class="pomo-btn secondary" id="pomoReset">↺ إعادة</button>
+    </div>
+
+    <div class="pomo-stats">
+      <div class="pomo-stat">
+        <div class="pomo-stat-val" id="statToday">0</div>
+        <div class="pomo-stat-lbl">جلسات اليوم</div>
+      </div>
+      <div class="pomo-stat">
+        <div class="pomo-stat-val" id="statTotal">0</div>
+        <div class="pomo-stat-lbl">إجمالي الجلسات</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADD TASK MODAL ── -->
+<div class="modal-overlay" id="taskModal">
+  <div class="modal">
+    <div class="modal-title">➕ إضافة مهمة جديدة</div>
+    <div class="form-group">
+      <label class="form-label">عنوان المهمة *</label>
+      <input class="form-input" id="modalTitle" placeholder="اكتب المهمة هنا..." />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">المشروع</label>
+        <select class="form-select" id="modalProject">
+          <option value="">— بدون مشروع —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">الأولوية</label>
+        <select class="form-select" id="modalPriority">
+          <option value="normal">عادي</option>
+          <option value="high">عالية 🔴</option>
+          <option value="low">منخفضة</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">تاريخ الاستحقاق</label>
+        <input class="form-input" type="date" id="modalDue" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">تذكير</label>
+        <input class="form-input" type="datetime-local" id="modalReminder" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">ملاحظات</label>
+      <input class="form-input" id="modalNote" placeholder="ملاحظة اختيارية..." />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="modalCancel">إلغاء</button>
+      <button class="btn-save" id="modalSave">💾 حفظ</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────
+let tasks = [], projects = ['عام'], pomoDuration = 25 * 60;
+let pomoRemaining = pomoDuration, pomoRunning = false, pomoInterval = null;
+let pomoMode = 'work', pomoSessionsToday = 0, pomoSessionsTotal = 0;
+let currentFilter = 'all', isDark = false, editId = null;
+const MODES = { work: 25*60, short: 5*60, long: 15*60 };
+const MODE_LABELS = { work: 'وقت العمل', short: 'استراحة قصيرة', long: 'استراحة كبيرة' };
+
+// ─── Storage ──────────────────────────────────────────
+function save() {
+  try {
+    chrome.storage.local.set({
+      tasks, projects,
+      pomoStats: { today: pomoSessionsToday, total: pomoSessionsTotal }
+    });
+  } catch(e) { /* dev fallback */ }
+}
+function load(cb) {
+  try {
+    chrome.storage.local.get(['tasks','projects','pomoStats'], r => {
+      tasks = r.tasks || [];
+      projects = r.projects || ['عام'];
+      const s = r.pomoStats || {};
+      pomoSessionsToday = s.today || 0;
+      pomoSessionsTotal = s.total || 0;
+      cb();
+    });
+  } catch(e) {
+    // Fallback for dev mode
+    tasks = JSON.parse(localStorage.getItem('tf_tasks') || '[]');
+    projects = JSON.parse(localStorage.getItem('tf_projects') || '["عام"]');
+    cb();
+  }
+}
+
+// ─── Tabs ────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('panel-' + t.dataset.tab).classList.add('active');
+    if (t.dataset.tab === 'table') renderTable();
+    if (t.dataset.tab === 'projects') renderProjects();
+  });
+});
+
+// ─── Theme ───────────────────────────────────────────
+document.getElementById('btnTheme').addEventListener('click', () => {
+  isDark = !isDark;
+  document.body.toggleAttribute('data-dark', isDark);
+});
+
+// ─── Filter ──────────────────────────────────────────
+document.getElementById('filterRow').addEventListener('click', e => {
+  if (!e.target.dataset.filter) return;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  e.target.classList.add('active');
+  currentFilter = e.target.dataset.filter;
+  renderTasks();
+});
+
+// ─── Quick add ───────────────────────────────────────
+document.getElementById('quickAdd').addEventListener('keydown', e => {
+  if (e.key === 'Enter') quickAdd();
+});
+document.getElementById('quickAddBtn').addEventListener('click', quickAdd);
+
+function quickAdd() {
+  const inp = document.getElementById('quickAdd');
+  const title = inp.value.trim();
+  if (!title) return;
+  addTask({ title, project: '', priority: 'normal', due: '', reminder: '', note: '' });
+  inp.value = '';
+}
+
+// ─── Modal ───────────────────────────────────────────
+document.getElementById('btnAddTask').addEventListener('click', openModal);
+document.getElementById('modalCancel').addEventListener('click', closeModal);
+document.getElementById('taskModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+document.getElementById('modalSave').addEventListener('click', saveModal);
+
+function openModal(taskData) {
+  editId = taskData && taskData.id ? taskData.id : null;
+  populateProjectSelect();
+  const modal = document.getElementById('taskModal');
+  document.getElementById('modalTitle').value = taskData && taskData.title ? taskData.title : '';
+  document.getElementById('modalProject').value = taskData && taskData.project ? taskData.project : '';
+  document.getElementById('modalPriority').value = taskData && taskData.priority ? taskData.priority : 'normal';
+  document.getElementById('modalDue').value = taskData && taskData.due ? taskData.due : '';
+  document.getElementById('modalReminder').value = taskData && taskData.reminder ? taskData.reminder : '';
+  document.getElementById('modalNote').value = taskData && taskData.note ? taskData.note : '';
+  modal.classList.add('open');
+  setTimeout(() => document.getElementById('modalTitle').focus(), 50);
+}
+
+function closeModal() {
+  document.getElementById('taskModal').classList.remove('open');
+  editId = null;
+}
+
+function saveModal() {
+  const title = document.getElementById('modalTitle').value.trim();
+  if (!title) { document.getElementById('modalTitle').focus(); return; }
+  const data = {
+    title,
+    project: document.getElementById('modalProject').value,
+    priority: document.getElementById('modalPriority').value,
+    due: document.getElementById('modalDue').value,
+    reminder: document.getElementById('modalReminder').value,
+    note: document.getElementById('modalNote').value
+  };
+  if (editId) {
+    const t = tasks.find(x => x.id === editId);
+    if (t) Object.assign(t, data);
+  } else {
+    addTask(data);
+  }
+  closeModal();
+}
+
+function populateProjectSelect() {
+  const sel = document.getElementById('modalProject');
+  sel.innerHTML = '<option value="">— بدون مشروع —</option>';
+  projects.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p; o.textContent = p;
+    sel.appendChild(o);
+  });
+}
+
+// ─── Tasks CRUD ──────────────────────────────────────
+function addTask(data) {
+  const task = { id: Date.now().toString(), done: false, createdAt: new Date().toISOString(), ...data };
+  tasks.unshift(task);
+  if (task.reminder) setReminder(task);
+  save();
+  renderTasks();
+  renderTable();
+}
+
+function toggleTask(id) {
+  const t = tasks.find(x => x.id === id);
+  if (t) { t.done = !t.done; save(); renderTasks(); renderTable(); }
+}
+
+function deleteTask(id) {
+  clearReminder(id);
+  tasks = tasks.filter(x => x.id !== id);
+  save(); renderTasks(); renderTable(); renderProjects();
+}
+
+function setReminder(task) {
+  if (!task.reminder) return;
+  const when = new Date(task.reminder).getTime();
+  if (when > Date.now()) {
+    try {
+      chrome.runtime.sendMessage({ type: 'SET_ALARM', name: 'reminder_' + task.id, when });
+    } catch(e) {}
+  }
+}
+function clearReminder(id) {
+  try { chrome.runtime.sendMessage({ type: 'CLEAR_ALARM', name: 'reminder_' + id }); } catch(e) {}
+}
+
+// ─── Render Tasks ────────────────────────────────────
+function renderTasks() {
+  const list = document.getElementById('tasksList');
+  let filtered = tasks;
+  if (currentFilter === 'active') filtered = tasks.filter(t => !t.done);
+  if (currentFilter === 'done')   filtered = tasks.filter(t => t.done);
+  if (currentFilter === 'high')   filtered = tasks.filter(t => t.priority === 'high');
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty-state">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <p>لا توجد مهام هنا</p>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = '';
+  // Group: active first, done last
+  const active = filtered.filter(t => !t.done);
+  const done = filtered.filter(t => t.done);
+
+  if (active.length) {
+    if (done.length) {
+      const lbl = document.createElement('div');
+      lbl.className = 'section-label'; lbl.textContent = 'قيد التنفيذ (' + active.length + ')';
+      list.appendChild(lbl);
+    }
+    active.forEach(t => list.appendChild(makeTaskEl(t)));
+  }
+  if (done.length) {
+    const lbl = document.createElement('div');
+    lbl.className = 'section-label'; lbl.textContent = 'منجزة (' + done.length + ')';
+    list.appendChild(lbl);
+    done.forEach(t => list.appendChild(makeTaskEl(t)));
+  }
+}
+
+function makeTaskEl(t) {
+  const div = document.createElement('div');
+  div.className = 'task-item' + (t.done ? ' done' : '');
+  div.innerHTML = `
+    <div class="task-check" data-id="${t.id}">
+      ${t.done ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+    </div>
+    <div class="task-body">
+      <div class="task-title">${escHtml(t.title)}</div>
+      <div class="task-meta">
+        ${t.project ? `<span class="badge badge-project">📁 ${escHtml(t.project)}</span>` : ''}
+        ${t.due ? `<span class="badge badge-due">📅 ${t.due}</span>` : ''}
+        ${t.priority === 'high' ? `<span class="badge badge-high">🔴 أولوية</span>` : ''}
+        ${t.reminder ? `<span class="badge" style="background:var(--primary-hi);color:var(--primary)">⏰ ${formatDT(t.reminder)}</span>` : ''}
+      </div>
+    </div>
+    <div class="task-actions">
+      <button class="task-act-btn edit-btn" data-id="${t.id}" title="تعديل">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+      <button class="task-act-btn del del-btn" data-id="${t.id}" title="حذف">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+      </button>
+    </div>`;
+
+  div.querySelector('.task-check').addEventListener('click', () => toggleTask(t.id));
+  div.querySelector('.edit-btn').addEventListener('click', () => openModal(t));
+  div.querySelector('.del-btn').addEventListener('click', () => {
+    if (confirm('حذف هذه المهمة؟')) deleteTask(t.id);
+  });
+  return div;
+}
+
+// ─── Render Table ─────────────────────────────────────
+function renderTable() {
+  const body = document.getElementById('tableBody');
+  if (!tasks.length) {
+    body.innerHTML = '<div class="empty-state" style="padding:20px"><p>لا توجد مهام بعد</p></div>';
+    return;
+  }
+  body.innerHTML = '';
+  [...tasks].sort((a,b) => {
+    if (a.done !== b.done) return a.done ? 1 : -1;
+    if (a.due && b.due) return a.due.localeCompare(b.due);
+    return 0;
+  }).forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'table-row' + (t.done ? ' done-row' : '');
+    const dotColor = t.done ? 'var(--success)' : t.priority === 'high' ? 'var(--error)' : 'var(--primary)';
+    row.innerHTML = `
+      <span class="tr-title">
+        <span class="status-dot" style="background:${dotColor}"></span>
+        ${escHtml(t.title)}
+      </span>
+      <span style="color:var(--muted);font-size:11px">${escHtml(t.project || '—')}</span>
+      <span style="color:var(--muted);font-size:11px">${t.due || '—'}</span>
+      <button class="task-act-btn del-btn" data-id="${t.id}" style="opacity:0.6">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+      </button>`;
+    row.querySelector('.del-btn').addEventListener('click', () => {
+      if (confirm('حذف؟')) { deleteTask(t.id); renderTable(); }
+    });
+    body.appendChild(row);
+  });
+}
+
+// ─── Render Projects ──────────────────────────────────
+function renderProjects() {
+  const list = document.getElementById('projectsList');
+  if (!projects.length) {
+    list.innerHTML = '<div class="empty-state"><p>لا توجد مشاريع</p></div>';
+    return;
+  }
+  list.innerHTML = '';
+  projects.forEach(p => {
+    const pTasks = tasks.filter(t => t.project === p);
+    const doneCnt = pTasks.filter(t => t.done).length;
+    const pct = pTasks.length ? Math.round(doneCnt / pTasks.length * 100) : 0;
+    const card = document.createElement('div');
+    card.className = 'project-card';
+    card.innerHTML = `
+      <div class="project-header">
+        <div>
+          <div class="project-name">📁 ${escHtml(p)}</div>
+          <div class="project-count">${pTasks.length} مهمة · ${doneCnt} منجزة</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:12px;font-weight:700;color:var(--primary)">${pct}%</span>
+          ${p !== 'عام' ? `<button class="task-act-btn del-proj" data-p="${escHtml(p)}" title="حذف المشروع" style="opacity:0.5">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>` : ''}
+        </div>
+      </div>
+      <div class="project-bar-bg">
+        <div class="project-bar-fill" style="width:${pct}%"></div>
+      </div>`;
+    const delBtn = card.querySelector('.del-proj');
+    if (delBtn) {
+      delBtn.addEventListener('click', () => {
+        if (confirm('حذف المشروع "' + p + '"؟\nسيتم إزالته من المهام أيضاً.')) {
+          projects = projects.filter(x => x !== p);
+          tasks.forEach(t => { if (t.project === p) t.project = ''; });
+          save(); renderProjects();
+        }
+      });
+    }
+    list.appendChild(card);
+  });
+}
+
+// ─── Add Project ─────────────────────────────────────
+document.getElementById('addProjectBtn').addEventListener('click', () => {
+  const inp = document.getElementById('newProjectName');
+  const name = inp.value.trim();
+  if (!name) return;
+  if (!projects.includes(name)) { projects.push(name); save(); }
+  inp.value = '';
+  renderProjects();
+});
+document.getElementById('newProjectName').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('addProjectBtn').click();
+});
+
+// ─── Pomodoro ────────────────────────────────────────
+const circumference = 2 * Math.PI * 68; // r=68
+document.querySelectorAll('.pomo-mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (pomoRunning) return;
+    document.querySelectorAll('.pomo-mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    pomoMode = btn.dataset.mode;
+    pomoRemaining = MODES[pomoMode];
+    pomoDuration = pomoRemaining;
+    clearInterval(pomoInterval);
+    pomoRunning = false;
+    document.getElementById('pomoStart').textContent = '▶ ابدأ';
+    document.getElementById('pomoLabel').textContent = MODE_LABELS[pomoMode];
+    updatePomoDisplay();
+  });
+});
+
+document.getElementById('pomoStart').addEventListener('click', () => {
+  if (!pomoRunning) {
+    pomoRunning = true;
+    document.getElementById('pomoStart').textContent = '⏸ إيقاف';
+    pomoInterval = setInterval(tick, 1000);
+    // Set alarm
+    try {
+      chrome.runtime.sendMessage({
+        type: 'SET_ALARM',
+        name: pomoMode === 'work' ? 'pomodoro_end' : 'break_end',
+        when: Date.now() + pomoRemaining * 1000
+      });
+    } catch(e) {}
+  } else {
+    pomoRunning = false;
+    clearInterval(pomoInterval);
+    document.getElementById('pomoStart').textContent = '▶ استأنف';
+    try { chrome.runtime.sendMessage({ type: 'CLEAR_ALARM', name: 'pomodoro_end' }); } catch(e) {}
+  }
+});
+
+document.getElementById('pomoReset').addEventListener('click', () => {
+  clearInterval(pomoInterval);
+  pomoRunning = false;
+  pomoRemaining = MODES[pomoMode];
+  pomoDuration = pomoRemaining;
+  document.getElementById('pomoStart').textContent = '▶ ابدأ';
+  updatePomoDisplay();
+  try { chrome.runtime.sendMessage({ type: 'CLEAR_ALARM', name: 'pomodoro_end' }); } catch(e) {}
+});
+
+function tick() {
+  if (pomoRemaining <= 0) {
+    clearInterval(pomoInterval);
+    pomoRunning = false;
+    document.getElementById('pomoStart').textContent = '▶ ابدأ';
+    if (pomoMode === 'work') {
+      pomoSessionsToday++; pomoSessionsTotal++;
+      updateSessionDots(); updateStats(); save();
+    }
+    pomoRemaining = 0;
+    updatePomoDisplay();
+    return;
+  }
+  pomoRemaining--;
+  updatePomoDisplay();
+}
+
+function updatePomoDisplay() {
+  const m = Math.floor(pomoRemaining / 60);
+  const s = pomoRemaining % 60;
+  document.getElementById('pomoTime').textContent =
+    String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  // Update ring
+  const prog = 1 - (pomoRemaining / pomoDuration);
+  const offset = circumference - prog * circumference;
+  document.getElementById('pomoProgress').style.strokeDashoffset = offset;
+  document.getElementById('pomoProgress').setAttribute('stroke-dasharray', circumference);
+}
+
+function updateSessionDots() {
+  const cont = document.getElementById('pomoSessions');
+  const dots = cont.querySelectorAll('.session-dot');
+  const count = pomoSessionsToday % 4 || 4;
+  if (dots.length !== 4) {
+    const lbl = cont.querySelector('span');
+    cont.innerHTML = '';
+    cont.appendChild(lbl || Object.assign(document.createElement('span'), { style:'font-size:11px;color:var(--muted);margin-left:8px', textContent:'الجلسات:' }));
+    for (let i = 0; i < 4; i++) {
+      const d = document.createElement('div');
+      d.className = 'session-dot' + (i < count ? ' done' : '');
+      cont.appendChild(d);
+    }
+  } else {
+    dots.forEach((d, i) => d.classList.toggle('done', i < count));
+  }
+}
+
+function updateStats() {
+  document.getElementById('statToday').textContent = pomoSessionsToday;
+  document.getElementById('statTotal').textContent = pomoSessionsTotal;
+}
+
+// ─── Helpers ──────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function formatDT(dt) {
+  if (!dt) return '';
+  const d = new Date(dt);
+  return d.toLocaleDateString('ar-EG',{month:'short',day:'numeric'}) + ' ' +
+    d.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
+}
+
+// ─── Init ─────────────────────────────────────────────
+function init() {
+  updatePomoDisplay();
+  updateSessionDots();
+  updateStats();
+  renderTasks();
+}
+load(init);
+</script>
+</body>
+</html>
