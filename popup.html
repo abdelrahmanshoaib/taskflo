@@ -543,6 +543,63 @@
   }
   .seg-btn.active { background: var(--primary-grad); color: #fff; border-color: transparent; box-shadow: var(--shadow-sm); }
   [data-dark] .seg-btn.active { color: #fff; }
+
+  /* ── Routine detail + health + tap (v2.3) ── */
+  .health-box {
+    background: var(--surface2);
+    backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 10px 12px; box-shadow: var(--shadow-sm);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .health-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .health-row .grow { flex: 1; }
+  .health-row input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px; }
+  .routine-card-click { cursor: pointer; }
+  .tap-btn {
+    flex: 1; padding: 10px; border-radius: 12px; font-size: 14px; font-weight: 800;
+    background: var(--primary-grad); color: #fff; box-shadow: var(--shadow-sm);
+    transition: transform var(--transition), filter var(--transition);
+  }
+  .tap-btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+  .tap-btn:active { transform: scale(.96); }
+  [data-dark] .tap-btn { color: #fff; }
+  .lastdone-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 700;
+    background: var(--primary-hi); color: var(--primary);
+  }
+  .lastdone-chip.over { background: #fce4f0; color: var(--error); }
+  [data-dark] .lastdone-chip.over { background: #3a1f2e; }
+  .rd-hero {
+    text-align: center; padding: 14px 10px; border-radius: var(--radius-lg);
+    background: var(--primary-grad); color: #fff; box-shadow: var(--shadow);
+    position: relative; overflow: hidden;
+  }
+  .rd-hero .lvl { font-size: 40px; line-height: 1; }
+  .rd-hero .t { font-size: 15px; font-weight: 800; margin-top: 6px; }
+  .rd-hero .s { font-size: 11px; opacity: .9; margin-top: 2px; }
+  .rd-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .rd-stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 8px 4px; text-align: center;
+  }
+  .rd-stat-val { font-size: 18px; font-weight: 800; color: var(--primary); }
+  .rd-stat-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .rd-bars { display: flex; gap: 4px; align-items: flex-end; height: 56px; }
+  .rd-bars > div { flex: 1; border-radius: 4px 4px 0 0; background: var(--border); min-height: 6px; position: relative; }
+  .rd-bars > div.hit { background: var(--primary); }
+  .rd-bars > div.today { outline: 2px solid var(--primary); outline-offset: 1px; }
+  .rd-mot {
+    background: var(--primary-hi); color: var(--primary);
+    border-radius: var(--radius); padding: 9px 12px; font-size: 12px; font-weight: 700;
+    text-align: center;
+  }
+  .rd-list { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: var(--muted); max-height: 110px; overflow-y: auto; }
+  .rd-list-row { display: flex; gap: 6px; align-items: center; border-bottom: 1px dashed var(--border); padding-bottom: 4px; }
+  .level-track { height: 8px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .level-fill { height: 8px; background: var(--primary-grad); border-radius: 99px; transition: width .5s; }
+  .modal-wide { width: 390px; max-height: 590px; overflow-y: auto; }
 </style>
 </head>
 <body>
@@ -687,21 +744,48 @@
 
 <!-- ── ROUTINES PANEL ── -->
 <div class="panel" id="panel-routines">
+  <div class="health-box">
+    <div class="health-row">
+      <span style="font-size:14px">🧘</span>
+      <div class="grow"><b>تنبيهات الصحة</b><div style="font-size:11px;color:var(--muted)">غمض عينيك + قوم اتحرك كل فترة تحافظ على صحتك</div></div>
+      <label class="check-line"><input type="checkbox" id="healthEnabled" /> تفعيل</label>
+    </div>
+    <div class="health-row">
+      <select class="adv-select" id="healthEvery" title="كل كام دقيقة؟">
+        <option value="15">كل 15 دقيقة</option>
+        <option value="20">كل 20 دقيقة (عينيك 👀)</option>
+        <option value="25">كل 25 دقيقة 🍅</option>
+        <option value="30" selected>كل 30 دقيقة</option>
+        <option value="45">كل 45 دقيقة</option>
+        <option value="60">كل ساعة</option>
+        <option value="90">كل ساعة ونص</option>
+        <option value="120">كل ساعتين</option>
+      </select>
+      <button class="mini-btn" id="healthTest">جرّب 🔔</button>
+    </div>
+  </div>
   <div class="add-project-form">
     <input type="text" id="routineTitle" placeholder="روتين جديد... (مثال: رياضة الصباح)" />
     <button class="btn-add" id="addRoutineBtn">إنشاء</button>
   </div>
   <div class="adv-row">
+    <select class="adv-select" id="routineKind" title="نوع الروتين">
+      <option value="auto">🔁 مهام مجدولة (يولد مهام)</option>
+      <option value="tap">👆 زر سريع Tap (دوسة واحدة = عملتها)</option>
+    </select>
     <select class="adv-select" id="routineRepeat">
       <option value="daily">يومي 📆</option>
       <option value="weekly">أسبوعي 🗓️</option>
       <option value="monthly">شهري 📅</option>
       <option value="custom">كل فترة محددة ⏳</option>
     </select>
+  </div>
+  <div class="adv-row">
     <div style="display:flex;gap:6px">
       <input class="adv-select" type="number" id="routineInterval" min="2" max="365" value="3" title="كل N يوم" style="display:none" />
       <input class="adv-select" type="time" id="routineTime" title="وقت التذكير (اختياري)" />
     </div>
+    <div style="font-size:10px;color:var(--muted);align-self:center">👆 الـ Tap مثالي لـ: مياه، دوا، رياضة سريعة — يحسبلك آخر مرة من إمتى</div>
   </div>
   <div class="adv-row">
     <select class="adv-select" id="routineProject"><option value="">المشروع: بدون</option></select>
@@ -966,6 +1050,20 @@
       <button class="btn-cancel" id="apptCancel">إلغاء</button>
       <button class="btn-save" id="apptSave">💾 حفظ</button>
     </div>
+  </div>
+</div>
+
+<!-- ── ROUTINE DETAIL MODAL ── -->
+<div class="modal-overlay" id="routineDetailModal">
+  <div class="modal modal-wide">
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="mini-btn" id="rdBack">‹ رجوع</button>
+      <div class="modal-title grow" id="rdTitle" style="flex:1">🔁 الروتين</div>
+      <button class="task-act-btn" id="rdClose" title="إغلاق" style="border:1px solid var(--border)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="routineDetailBody" style="display:flex;flex-direction:column;gap:10px"></div>
   </div>
 </div>
 

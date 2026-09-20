@@ -12,6 +12,30 @@ function notify(id, title, message) {
   } catch (e) { /* icons missing in dev */ }
 }
 
+// ─── Health breaks (eye + move) — rotating motivational messages ───
+const HEALTH_MSGS = [
+  { title: '👁️ ريح عينيك', message: 'غمض عينيك 20 ثانية وبص على حاجة بعيدة (قاعدة 20-20-20) 👀' },
+  { title: '🧍 قوم اتحرك', message: 'قوم من على الكمبيوتر، افرد ضهرك واتمشى دقيقتين 🧘' },
+  { title: '💧 اشرب مياه', message: 'اشرب كوباية مياه وخد 3 أنفاس عميقة 💧' },
+  { title: '🤸 فك جسمك', message: 'لف رقبتك وكتافك 10 مرات — جسمك هيشكرك 🙆' },
+  { title: '👁️ عينيك أمانة', message: 'ارمش كتير وقلل سطوع الشاشة دقيقة 😌' },
+  { title: '🚶 خطوات سريعة', message: 'اتمشى لحد الشباك وارجع — الدم يتحرك والتركيز يرجع ⚡' }
+];
+
+function fireHealthBreak() {
+  try {
+    chrome.storage.local.get(['healthIdx'], (r) => {
+      const i = Number(r.healthIdx) || 0;
+      const m = HEALTH_MSGS[i % HEALTH_MSGS.length];
+      notify('health_' + Date.now(), m.title, m.message);
+      try { chrome.storage.local.set({ healthIdx: i + 1 }); } catch (_) {}
+    });
+  } catch (_) {
+    const m = HEALTH_MSGS[Math.floor(Math.random() * HEALTH_MSGS.length)];
+    notify('health_' + Date.now(), m.title, m.message);
+  }
+}
+
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name.startsWith('reminder_')) {
     const taskId = alarm.name.replace('reminder_', '');
@@ -47,6 +71,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     notify('pomo', '🍅 انتهت جلسة التركيز!', 'أحسنت! سُجّل وقتك، وخذ استراحة.');
   } else if (alarm.name === 'break_end') {
     notify('brk', '⚡ انتهت الاستراحة!', 'هيا نعمل مجددًا!');
+  } else if (alarm.name === 'health_break') {
+    fireHealthBreak();
   } else if (alarm.name === 'overdue_sweep') {
     chrome.storage.local.get(['tasks', 'settings'], (result) => {
       const tasks = result.tasks || [];
@@ -66,6 +92,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({ ok: true });
     } else if (msg.type === 'CLEAR_ALARM') {
       chrome.alarms.clear(msg.name);
+      sendResponse({ ok: true });
+    } else if (msg.type === 'SET_PERIODIC') {
+      // Repeating alarm every N minutes (health breaks)
+      const mins = Math.max(1, Number(msg.minutes) || 30);
+      chrome.alarms.create(msg.name, { periodInMinutes: mins });
       sendResponse({ ok: true });
     } else if (msg.type === 'SNOOZE') {
       // Re-schedule an existing alarm N minutes later

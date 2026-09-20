@@ -88,8 +88,25 @@ function migrate() {
   if (!Array.isArray(appointments)) appointments = [];
   if (!Array.isArray(goals)) goals = [];
   if (!Array.isArray(routines)) routines = [];
+  // v2.3 additive migration: routine stats history + tap mode + health settings
+  routines = (routines || []).map(r => {
+    const n = Object.assign({}, r);
+    if (!n.id) n.id = uid();
+    if (!Array.isArray(n.completions)) n.completions = []; // [YYYY-MM-DD]
+    if (!Array.isArray(n.tapHistory)) n.tapHistory = [];   // [ISO]
+    if (n.bestStreak === undefined) n.bestStreak = n.streak || 0;
+    if (n.tapMode === undefined) n.tapMode = false;
+    if (!n.kind) n.kind = n.tapMode ? 'tap' : 'auto';
+    if (n.tapMode === true) n.kind = 'tap';
+    if (n.tapCount === undefined) n.tapCount = (n.tapHistory || []).length;
+    if (n.lastDoneAt === undefined) n.lastDoneAt = '';
+    if (!Array.isArray(n.skipDates)) n.skipDates = [];
+    if (n.active === undefined) n.active = true;
+    return n;
+  });
   if (!Array.isArray(focusSessions)) focusSessions = [];
   settings = Object.assign({ dark: false, work: 25, short: 5, long: 15, auto: false, sound: true, overdueNotify: true }, settings || {});
+  settings.health = Object.assign({ enabled: false, every: 30 }, (settings && settings.health) || {});
   settings.ui = Object.assign({ accent: 'teal', mode: 'light', glass: 'on', density: 'comfortable' }, settings.ui || {});
 }
 function load(cb) {
@@ -145,7 +162,7 @@ document.querySelectorAll('.tab').forEach(t => {
 });
 // Global keyboard shortcuts: / search, n new task, Esc close
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModal(); closeApptModal(); closeSettings(); }
+  if (e.key === 'Escape') { closeModal(); closeApptModal(); closeSettings(); if (typeof closeRoutineDetail === 'function') closeRoutineDetail(); }
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
   if (e.key === '/') { e.preventDefault(); switchTab('tasks'); const s = document.getElementById('searchInput'); if (s) s.focus(); }
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openModal(); }
@@ -1367,6 +1384,7 @@ function ensureRoutines() {
   let changed = false, spawned = 0;
   routines.forEach(r => {
     if (!r.active) return;
+    if (r.tapMode || r.kind === 'tap') return; // Tap routines: no auto tasks, manual tap only
     const skipped = r.skipDates || [];
     let from = r.lastGenerated ? addDaysK(r.lastGenerated, 1) : null;
     if (!from) {
@@ -1410,9 +1428,92 @@ function updateRoutineStreak(t) {
   const due = t.due;
   if (r.lastCompleted === due) return;
   const yest = addDaysK(due, -1);
-  r.streak = (r.lastCompleted === yest) ? (r.streak || 0) + 1 : 1;
+  // consecutive-day streak (legacy kept) + history for stats
+  r.streak = (r.lastCompleted === yest || r.lastCompleted === due) ? (r.streak || 0) + 1 : 1;
   r.lastCompleted = due;
+  r.completions = r.completions || [];
+  if (!r.completions.includes(due)) {
+    r.completions.push(due);
+    if (r.completions.length > 180) r.completions = r.completions.slice(-180);
+  }
+  r.bestStreak = Math.max(r.bestStreak || 0, r.streak || 0);
+  r.lastDoneAt = new Date().toISOString();
   save();
+}
+
+// ─── v2.3: fun stats + tap + health helpers ─────────────────
+function timeAgoAr(iso) {
+  if (!iso) return 'لسه معملتهاش 😅';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 0) return 'الآن ⚡';
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return 'من ثواني ⚡';
+  if (m < 60) return 'من ' + m + ' دقيقة ⏳';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h === 1 ? 'من ساعة 🕐' : h === 2 ? 'من ساعتين 🕑' : 'من ' + h + ' ساعات 🕐';
+  const d = Math.floor(h / 24);
+  if (d === 1) return 'من امبارح 📆';
+  if (d === 2) return 'من يومين 📆';
+  if (d < 30) return 'من ' + d + ' أيام 📆';
+  const mo = Math.floor(d / 30);
+  return mo === 1 ? 'من شهر 🌙' : 'من ' + mo + ' شهور 🌙';
+}
+function routineLevel(streak) {
+  const s = streak || 0;
+  if (s >= 30) return { e: '🏆', t: 'أسطوري!', next: 60, cur: s };
+  if (s >= 14) return { e: '⚡', t: 'بطل الالتزام', next: 30, cur: s };
+  if (s >= 7) return { e: '🔥', t: 'ملتزم نار', next: 14, cur: s };
+  if (s >= 3) return { e: '🌱', t: 'بيكبر كل يوم', next: 7, cur: s };
+  return { e: '🐣', t: 'بداية جميلة', next: 3, cur: s };
+}
+function routineMotivation(r, pct7) {
+  if ((r.streak || 0) >= 7) return '🔥 وحش! ' + (r.streak || 0) + ' أيام ورا بعض — حافظ على السلسلة!';
+  if ((r.streak || 0) >= 3) return '💪 عاش! 3 أيام التزام — انت على الطريق الصح';
+  if (pct7 >= 70) return '✨ التزامك عالي الأسبوع ده — كمل يا بطل!';
+  if ((r.tapCount || (r.tapHistory || []).length || (r.completions || []).length) > 0) return '🌱 بداية حلوة! كل دوسة بتقربك لنسخة أحسن منك';
+  return '🚀 أول خطوة أهم خطوة — دوس وسجل أول إنجاز!';
+}
+function routineStats(r) {
+  const comp = r.tapMode || r.kind === 'tap'
+    ? (r.tapHistory || []).map(x => (x || '').slice(0, 10))
+    : (r.completions || []);
+  const set = new Set(comp);
+  let hit7 = 0, hit30 = 0;
+  for (let i = 0; i < 7; i++) if (set.has(todayStr(-i))) hit7++;
+  for (let i = 0; i < 30; i++) if (set.has(todayStr(-i))) hit30++;
+  const total = r.tapMode || r.kind === 'tap' ? (r.tapHistory || []).length : comp.length;
+  return { hit7, hit30, pct7: Math.round(hit7 / 7 * 100), pct30: Math.round(hit30 / 30 * 100), total };
+}
+function lastDoneOf(r) {
+  if (r.tapMode || r.kind === 'tap') return r.lastDoneAt || ((r.tapHistory || []).slice(-1)[0] || '');
+  if (r.lastDoneAt) return r.lastDoneAt;
+  if (r.lastCompleted) return r.lastCompleted + 'T12:00:00';
+  const c = (r.completions || []).slice(-1)[0];
+  return c ? c + 'T12:00:00' : '';
+}
+// Tap-to-log: one press = done now (no task generation)
+function logTapRoutine(id) {
+  const r = routines.find(x => x.id === id);
+  if (!r) return;
+  const now = new Date().toISOString();
+  const todayK = todayStr();
+  r.tapHistory = r.tapHistory || [];
+  r.tapHistory.push(now);
+  if (r.tapHistory.length > 300) r.tapHistory = r.tapHistory.slice(-300);
+  r.tapCount = r.tapHistory.length;
+  r.lastDoneAt = now;
+  // day streak from tap days
+  const days = [...new Set(r.tapHistory.map(x => (x || '').slice(0, 10)))].sort();
+  const last = days[days.length - 1];
+  if (last === todayK) {
+    const prev = days[days.length - 2];
+    r.streak = (prev === addDaysK(todayK, -1)) ? (r.streak || 0) + (r._tapStreakDay === todayK ? 0 : 1) : (r._tapStreakDay === todayK ? (r.streak || 1) : 1);
+    r._tapStreakDay = todayK;
+  }
+  r.bestStreak = Math.max(r.bestStreak || 0, r.streak || 0);
+  save(); renderRoutines();
+  if (selectedRoutineId === id) renderRoutineDetail(id);
+  toast('👆 عاش! اتسجلت ✅ (' + timeAgoAr(now) + ')');
 }
 function refreshRoutineProjects() {
   const sel = document.getElementById('routineProject');
@@ -1433,23 +1534,31 @@ document.getElementById('addRoutineBtn').addEventListener('click', () => {
   const title = inp.value.trim();
   if (!title) { inp.focus(); toast('⚠️ اسم الروتين مطلوب'); return; }
   const repeat = document.getElementById('routineRepeat').value;
+  const kindSel = document.getElementById('routineKind');
+  const kind = kindSel ? kindSel.value : 'auto';
+  const isTap = kind === 'tap';
   const r = {
     id: uid(), title, description: '', project: document.getElementById('routineProject').value,
     priority: document.getElementById('routinePriority').value, repeat,
     intervalDays: repeat === 'custom' ? Math.min(365, Math.max(2, parseInt(document.getElementById('routineInterval').value, 10) || 3)) : 0,
     time: document.getElementById('routineTime').value, estMinutes: 0, tags: [],
     active: true, anchor: todayStr(), lastGenerated: '', lastCompleted: '', streak: 0,
-    skipDates: [], createdAt: new Date().toISOString()
+    skipDates: [], createdAt: new Date().toISOString(),
+    kind: isTap ? 'tap' : 'auto', tapMode: isTap,
+    completions: [], tapHistory: [], tapCount: 0, lastDoneAt: '', bestStreak: 0
   };
   routines.unshift(r);
   inp.value = '';
   save();
-  const n = ensureRoutines();
+  let n = 0;
+  if (!isTap) n = ensureRoutines();
   renderRoutines(); refreshRoutineProjects();
-  toast('🔁 تم إنشاء الروتين' + (n ? ' وتوليد ' + n + ' مهمة' : ' (' + routineLabel(r) + ')'));
+  toast(isTap ? '👆 روتين سريع جاهز — دوس عليه كل ما تعمله!' : ('🔁 تم إنشاء الروتين' + (n ? ' وتوليد ' + n + ' مهمة' : ' (' + routineLabel(r) + ')')));
 });
+let selectedRoutineId = null;
 function renderRoutines() {
   refreshRoutineProjects();
+  bindHealthUI();
   const list = document.getElementById('routinesList');
   list.innerHTML = '';
   if (!routines.length) {
@@ -1457,54 +1566,73 @@ function renderRoutines() {
     return;
   }
   routines.forEach(r => {
-    const occs = tasks.filter(x => x.routineId === r.id && !x.archived);
+    const isTap = r.tapMode || r.kind === 'tap';
+    const occs = isTap ? [] : tasks.filter(x => x.routineId === r.id && !x.archived);
     const pending = occs.filter(x => !x.done).length;
     const doneN = occs.filter(x => x.done).length;
+    const lastIso = lastDoneOf(r);
+    const agoTxt = timeAgoAr(lastIso);
+    const isOver = lastIso ? (Date.now() - new Date(lastIso).getTime() > 24 * 3600000) : true;
+    const tapToday = isTap ? (r.tapHistory || []).filter(x => (x || '').slice(0, 10) === todayStr()).length : 0;
     const card = document.createElement('div');
-    card.className = 'project-card' + (r.active ? '' : ' routine-off');
+    card.className = 'project-card routine-card-click' + (r.active ? '' : ' routine-off');
     card.innerHTML = `
       <div class="project-header">
-        <div>
-          <div class="project-name">🔁 ${escHtml(r.title)}${r.active ? '' : ' ⏸'}</div>
-          <div class="project-count">${routineLabel(r)}${r.project ? ' · 📁 ' + escHtml(r.project) : ''}${r.time ? ' · ⏰ ' + r.time : ''}</div>
-          <div class="project-count">${pending} معلقة · ${doneN} منجزة</div>
+        <div style="flex:1;min-width:0">
+          <div class="project-name">${isTap ? '👆' : '🔁'} ${escHtml(r.title)}${r.active ? '' : ' ⏸'}</div>
+          <div class="project-count">${isTap ? 'زر سريع Tap' : routineLabel(r)}${r.project ? ' · 📁 ' + escHtml(r.project) : ''}${r.time && !isTap ? ' · ⏰ ' + r.time : ''}</div>
+          <div class="project-count">${isTap ? ('👆 ' + (r.tapCount || 0) + ' مرة · اليوم ' + tapToday) : (pending + ' معلقة · ' + doneN + ' منجزة')}</div>
+          <div style="margin-top:5px"><span class="lastdone-chip${isOver ? ' over' : ''}">⏱ آخر مرة: ${escHtml(agoTxt)}</span></div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px;flex-direction:column">
           <span class="streak-fire" title="أيام متتالية">🔥 ${r.streak || 0}</span>
           <button class="task-act-btn del-routine" title="حذف الروتين" style="opacity:0.5">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
       </div>
+      ${isTap ? `<div style="display:flex;gap:6px;margin-top:8px"><button class="tap-btn rt-tap">👆 عملتها! سجل الآن</button></div>` : ''}
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-        <button class="mini-btn rt-toggle">${r.active ? '⏸ إيقاف' : '▶ استئناف'}</button>
+        <button class="mini-btn go rt-open">📊 التفاصيل والإحصائيات</button>
+        ${isTap ? '' : `<button class="mini-btn rt-toggle">${r.active ? '⏸ إيقاف' : '▶ استئناف'}</button>
         <button class="mini-btn rt-skip">تخطي اليوم</button>
-        <button class="mini-btn rt-view">عرض المهام</button>
+        <button class="mini-btn rt-view">عرض المهام</button>`}
       </div>`;
-    card.querySelector('.rt-toggle').addEventListener('click', () => {
-      r.active = !r.active;
-      save();
-      if (r.active) ensureRoutines();
-      renderAll();
-      toast(r.active ? '▶ استُؤنف الروتين' : '⏸ أُوقف الروتين مؤقتاً');
+    // Click card → detail (except on buttons)
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      openRoutineDetail(r.id);
     });
-    card.querySelector('.rt-skip').addEventListener('click', () => {
-      const t = todayStr();
-      r.skipDates = r.skipDates || [];
-      if (!r.skipDates.includes(t)) r.skipDates.push(t);
-      r.lastGenerated = t;
-      save(); renderAll();
-      toast('⏭ تُخطي روتين اليوم');
-    });
-    card.querySelector('.rt-view').addEventListener('click', () => {
-      searchQ = r.title;
-      const s = document.getElementById('searchInput');
-      if (s) s.value = r.title;
-      currentFilter = 'all';
-      document.querySelectorAll('#filterRow .filter-chip').forEach(c => c.classList.toggle('active', c.dataset.filter === 'all'));
-      switchTab('tasks');
-    });
-    card.querySelector('.del-routine').addEventListener('click', () => {
+    card.querySelector('.rt-open').addEventListener('click', (ev) => { ev.stopPropagation(); openRoutineDetail(r.id); });
+    const tapBtn = card.querySelector('.rt-tap');
+    if (tapBtn) tapBtn.addEventListener('click', (ev) => { ev.stopPropagation(); logTapRoutine(r.id); });
+    if (!isTap) {
+      card.querySelector('.rt-toggle').addEventListener('click', () => {
+        r.active = !r.active;
+        save();
+        if (r.active) ensureRoutines();
+        renderAll();
+        toast(r.active ? '▶ استُؤنف الروتين' : '⏸ أُوقف الروتين مؤقتاً');
+      });
+      card.querySelector('.rt-skip').addEventListener('click', () => {
+        const t = todayStr();
+        r.skipDates = r.skipDates || [];
+        if (!r.skipDates.includes(t)) r.skipDates.push(t);
+        r.lastGenerated = t;
+        save(); renderAll();
+        toast('⏭ تُخطي روتين اليوم');
+      });
+      card.querySelector('.rt-view').addEventListener('click', () => {
+        searchQ = r.title;
+        const s = document.getElementById('searchInput');
+        if (s) s.value = r.title;
+        currentFilter = 'all';
+        document.querySelectorAll('#filterRow .filter-chip').forEach(c => c.classList.toggle('active', c.dataset.filter === 'all'));
+        switchTab('tasks');
+      });
+    }
+    card.querySelector('.del-routine').addEventListener('click', (ev) => {
+      ev.stopPropagation();
       if (!confirm('حذف الروتين "' + r.title + '"؟\nمهامه الحالية ستبقى كمهام عادية.')) return;
       routines = routines.filter(x => x.id !== r.id);
       tasks.forEach(x => { if (x.routineId === r.id) { x.routineId = ''; logActivity(x, 'انفصال عن روتين محذوف'); } });
@@ -1513,6 +1641,141 @@ function renderRoutines() {
     });
     list.appendChild(card);
   });
+}
+
+// ─── Routine detail page (modal) — fun motivational stats ───
+function openRoutineDetail(id) {
+  selectedRoutineId = id;
+  renderRoutineDetail(id);
+  document.getElementById('routineDetailModal').classList.add('open');
+}
+function closeRoutineDetail() {
+  document.getElementById('routineDetailModal').classList.remove('open');
+  selectedRoutineId = null;
+}
+function renderRoutineDetail(id) {
+  const r = routines.find(x => x.id === id);
+  const body = document.getElementById('routineDetailBody');
+  if (!r) { body.innerHTML = '<div class="empty-state"><p>الروتين مش موجود</p></div>'; return; }
+  const isTap = r.tapMode || r.kind === 'tap';
+  document.getElementById('rdTitle').textContent = (isTap ? '👆 ' : '🔁 ') + r.title;
+  const st = routineStats(r);
+  const lvl = routineLevel(r.streak || 0);
+  const lastIso = lastDoneOf(r);
+  const toNext = Math.max(1, lvl.next - lvl.cur);
+  const pctNext = Math.min(100, Math.round(lvl.cur / lvl.next * 100));
+  // last 14 days bars
+  let bars = '';
+  for (let i = 13; i >= 0; i--) {
+    const k = todayStr(-i);
+    const isT = i === 0;
+    const has = isTap
+      ? (r.tapHistory || []).some(x => (x || '').slice(0, 10) === k)
+      : (r.completions || []).includes(k);
+    bars += `<div class="${has ? 'hit' : ''}${isT ? ' today' : ''}" title="${k}: ${has ? '✅' : '—'}" style="height:${has ? 52 : 10}px"></div>`;
+  }
+  const hist = isTap
+    ? (r.tapHistory || []).slice(-5).reverse()
+    : (r.completions || []).slice(-5).reverse();
+  const histHtml = hist.length
+    ? hist.map(h => `<div class="rd-list-row"><span>✅</span><span>${escHtml(isTap ? formatDT(h) : h)}</span></div>`).join('')
+    : '<div style="color:var(--faint)">لسه مفيش سجل — ابدأ النهاردة 🚀</div>';
+  body.innerHTML = `
+    <div class="rd-hero">
+      <div class="lvl">${lvl.e}</div>
+      <div class="t">${escHtml(lvl.t)} — 🔥 ${r.streak || 0} أيام</div>
+      <div class="s">الأفضل: 🏅 ${r.bestStreak || 0} · باقي ${toNext} للفل الجاي</div>
+      <div class="level-track" style="margin-top:8px;background:rgba(255,255,255,.3)"><div class="level-fill" style="width:${pctNext}%;background:#fff"></div></div>
+    </div>
+    <div class="rd-mot">${escHtml(routineMotivation(r, st.pct7))}</div>
+    <div class="rd-stats">
+      <div class="rd-stat"><div class="rd-stat-val">${st.hit7}/7</div><div class="rd-stat-lbl">آخر 7 أيام</div></div>
+      <div class="rd-stat"><div class="rd-stat-val">${st.pct7}%</div><div class="rd-stat-lbl">الالتزام الأسبوعي</div></div>
+      <div class="rd-stat"><div class="rd-stat-val">${st.total}</div><div class="rd-stat-lbl">${isTap ? 'إجمالي الدوسات' : 'إجمالي المرات'}</div></div>
+    </div>
+    <div>
+      <div class="section-label">📊 آخر 14 يوم (دوس على أي يوم)</div>
+      <div class="rd-bars">${bars}</div>
+    </div>
+    <div>
+      <span class="lastdone-chip">⏱ آخر مرة: ${escHtml(timeAgoAr(lastIso))}</span>
+      <span class="tag-chip">📅 30 يوم: ${st.hit30}/30 (${st.pct30}%)</span>
+    </div>
+    <div>
+      <div class="section-label">🕘 آخر الإنجازات</div>
+      <div class="rd-list">${histHtml}</div>
+    </div>
+    <div style="display:flex;gap:6px">
+      ${isTap
+        ? '<button class="tap-btn" id="rdTap">👆 عملتها دلوقتي!</button>'
+        : '<button class="tap-btn" id="rdDone">✅ سجل إنجاز النهاردة</button>'}
+    </div>`;
+  const bTap = document.getElementById('rdTap');
+  if (bTap) bTap.addEventListener('click', () => logTapRoutine(r.id));
+  const bDone = document.getElementById('rdDone');
+  if (bDone) bDone.addEventListener('click', () => {
+    const t = todayStr();
+    r.completions = r.completions || [];
+    if (!r.completions.includes(t)) {
+      const yest = addDaysK(t, -1);
+      r.streak = (r.lastCompleted === yest || r.lastCompleted === t) ? (r.streak || 0) + 1 : ((r.completions.length ? 1 : 1));
+      r.lastCompleted = t;
+      r.completions.push(t);
+      r.bestStreak = Math.max(r.bestStreak || 0, r.streak || 0);
+      r.lastDoneAt = new Date().toISOString();
+      save(); renderRoutines(); renderRoutineDetail(r.id);
+      toast('🎉 عاش يا بطل! اتسجل إنجاز النهاردة 🔥');
+    } else toast('✅ متسجلة already النهاردة — كمل بكرة 🔥');
+  });
+}
+
+// ─── Health breaks wiring ───
+let _healthBound = false;
+function bindHealthUI() {
+  if (_healthBound) return;
+  const en = document.getElementById('healthEnabled');
+  const ev = document.getElementById('healthEvery');
+  if (!en || !ev) return;
+  _healthBound = true;
+  en.checked = !!(settings.health && settings.health.enabled);
+  ev.value = String((settings.health && settings.health.every) || 30);
+  en.addEventListener('change', () => {
+    settings.health = settings.health || {};
+    settings.health.enabled = en.checked;
+    save(); applyHealthAlarm();
+    toast(en.checked ? '🧘 تنبيهات الصحة اشتغلت كل ' + settings.health.every + ' دقيقة' : '🧘 تنبيهات الصحة وقفت');
+  });
+  ev.addEventListener('change', () => {
+    settings.health = settings.health || {};
+    settings.health.every = Math.max(5, parseInt(ev.value, 10) || 30);
+    save(); applyHealthAlarm();
+    if (settings.health.enabled) toast('⏰ هيجيلك تنبيه كل ' + settings.health.every + ' دقيقة');
+  });
+  const tst = document.getElementById('healthTest');
+  if (tst) tst.addEventListener('click', () => {
+    try { chrome.notifications.create('health_test', { type: 'basic', iconUrl: 'icons/icon48.png', title: '👁️ ريح عينيك', message: 'غمض عينيك 20 ثانية وقوم اتمشى دقيقتين 🧘' }); } catch (e) {}
+    toast('🔔 ده شكل التنبيه اللي هيجيلك');
+  });
+  const back = document.getElementById('rdBack');
+  if (back) back.addEventListener('click', closeRoutineDetail);
+  const cls = document.getElementById('rdClose');
+  if (cls) cls.addEventListener('click', closeRoutineDetail);
+  const ov = document.getElementById('routineDetailModal');
+  if (ov) ov.addEventListener('click', (e) => { if (e.target === ov) closeRoutineDetail(); });
+}
+function applyHealthAlarm() {
+  try {
+    if (settings.health && settings.health.enabled) {
+      chrome.runtime.sendMessage({ type: 'SET_PERIODIC', name: 'health_break', minutes: settings.health.every || 30 });
+    } else {
+      chrome.runtime.sendMessage({ type: 'CLEAR_ALARM', name: 'health_break' });
+    }
+  } catch (e) {}
+  // keep checkbox in sync if called from init
+  const en = document.getElementById('healthEnabled');
+  if (en) en.checked = !!(settings.health && settings.health.enabled);
+  const ev = document.getElementById('healthEvery');
+  if (ev && settings.health) ev.value = String(settings.health.every || 30);
 }
 
 // ─── Helpers ──────────────────────────────────────────
@@ -1695,7 +1958,9 @@ function init() {
   refreshTemplateSelect();
   refreshFilterProjects();
   refreshRoutineProjects();
+  bindHealthUI();
   ensureRoutines();
+  applyHealthAlarm();
   // Pomodoro durations from settings + recovery after accidental close
   pomoDuration = currentModeSecs();
   pomoRemaining = pomoDuration;
