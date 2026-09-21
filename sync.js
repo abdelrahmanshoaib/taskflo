@@ -276,8 +276,37 @@
     }, 2500);
   }
 
+  // ─── Self-diagnostics (read-only, no side effects) ───
+  // Returns [{ok, text}]: config present → apiKey valid? → Firestore reachable? → Google client present?
+  async function diagnoseCloud() {
+    const steps = [];
+    const c = cfg();
+    if (!isConfigured()) {
+      steps.push({ ok: false, text: 'ملف firebase-config.js لسه بالقيم التجريبية — حط مفاتيحك الأول' });
+      return steps;
+    }
+    steps.push({ ok: true, text: 'ملف الإعداد موجود (project: ' + c.projectId + ')' });
+    try {
+      const res = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + c.apiKey, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({})
+      });
+      const j = await res.json().catch(() => ({}));
+      const msg = (j && j.error && j.error.message) || '';
+      if (/API_KEY_INVALID|API key not valid/i.test(msg)) steps.push({ ok: false, text: 'الـ apiKey غير صالح — انسخه تاني من Project Settings' });
+      else steps.push({ ok: true, text: 'الـ apiKey سليم' });
+    } catch (e) { steps.push({ ok: false, text: 'تعذر الوصول لسيرفرات جوجل — اتأكد من الإنترنت' }); return steps; }
+    try {
+      const res = await fetch('https://firestore.googleapis.com/v1/projects/' + c.projectId + '/databases/(default)/documents/users/__ping__/data/main');
+      if (res.status === 401 || res.status === 403 || res.status === 404 || res.status === 400) steps.push({ ok: true, text: 'Firestore متاح (الصلاحيات بتتحدد بالقواعد)' });
+      else steps.push({ ok: true, text: 'Firestore رد (status ' + res.status + ')' });
+    } catch (e) { steps.push({ ok: false, text: 'تعذر الوصول لـ Firestore — اتأكد من إنشاء الداتابيز' }); }
+    if (c.googleClientId && c.googleClientId.indexOf('PASTE') !== 0 && /apps\.googleusercontent\.com/.test(c.googleClientId)) steps.push({ ok: true, text: 'Google Client ID موجود (فاضل تفعيل الـ provider + redirect URI)' });
+    else steps.push({ ok: false, text: 'حط الـ googleClientId (نوع Web) في firebase-config.js لدخول جوجل' });
+    return steps;
+  }
+
   window.TaskfloSync = {
     isConfigured, getSession, getPrefs, setPrefs,
-    signUp, signIn, signInWithGoogle, signOut, pushNow, pullNow, schedulePush, syncOnStart
+    signUp, signIn, signInWithGoogle, signOut, pushNow, pullNow, schedulePush, syncOnStart, diagnoseCloud
   };
 })();

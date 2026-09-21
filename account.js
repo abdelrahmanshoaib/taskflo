@@ -152,6 +152,15 @@
         say('📋 اتنسخ رابط الجهاز — الصقه في Google Cloud بدل السطر القديم');
       } catch (e) { say('❌ فشل النسخ: ' + e.message); }
     });
+    if ($('btnDiagnose')) $('btnDiagnose').addEventListener('click', async () => {
+      try {
+        say('🩺 جاري فحص الإعداد...');
+        const steps = await S.diagnoseCloud();
+        const bad = steps.filter(s => !s.ok).length;
+        say((bad ? '⚠️ ' : '✅ ') + steps.map(s => (s.ok ? '✔ ' : '✘ ') + s.text).join(' — '));
+        renderAccount();
+      } catch (e) { say('❌ فشل الفحص: ' + e.message); }
+    });
   }
 
   // Called from popup.js init() after data load (decoupled).
