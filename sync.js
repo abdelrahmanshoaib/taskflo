@@ -297,9 +297,28 @@
     } catch (e) { steps.push({ ok: false, text: 'تعذر الوصول لسيرفرات جوجل — اتأكد من الإنترنت' }); return steps; }
     try {
       const res = await fetch('https://firestore.googleapis.com/v1/projects/' + c.projectId + '/databases/(default)/documents/users/__ping__/data/main');
-      if (res.status === 401 || res.status === 403 || res.status === 404 || res.status === 400) steps.push({ ok: true, text: 'Firestore متاح (الصلاحيات بتتحدد بالقواعد)' });
+      if (res.status === 200) {
+        let leaked = false;
+        try { const j = await res.json(); leaked = !!(j && j.fields && j.fields.payload); } catch (e) {}
+        steps.push(leaked
+          ? { ok: false, text: '⚠️ خطر: قراءة بدون دخول رجعت داتا! اقفل الـ Rules فوراً (per-user فقط)' }
+          : { ok: true, text: 'Firestore متاح (الصلاحيات بتتحدد بالقواعد)' });
+      }
+      else if (res.status === 401 || res.status === 403 || res.status === 404 || res.status === 400) steps.push({ ok: true, text: 'Firestore متاح ومقفول بدون دخول (الصلاحيات بتتحدد بالقواعد)' });
       else steps.push({ ok: true, text: 'Firestore رد (status ' + res.status + ')' });
     } catch (e) { steps.push({ ok: false, text: 'تعذر الوصول لـ Firestore — اتأكد من إنشاء الداتابيز' }); }
+    // Email/Password provider probe (harmless failed login with fake address — no side effects)
+    try {
+      const res = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + c.apiKey, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: '__probe__@invalid.test', password: 'Probe12345678', returnSecureToken: true })
+      });
+      const j = await res.json().catch(() => ({}));
+      const msg = String((j && j.error && j.error.message) || '');
+      if (/OPERATION_NOT_ALLOWED|PASSWORD_LOGIN_DISABLED/i.test(msg)) steps.push({ ok: false, text: 'دخول الإيميل مقفول — فعّله من Authentication → Sign-in method → Email/Password' });
+      else if (/EMAIL_NOT_FOUND|INVALID_PASSWORD|INVALID_EMAIL|USER_DISABLED/i.test(msg)) steps.push({ ok: true, text: 'دخول الإيميل مفعّل — تقدر تعمل حساب وتسجل دخول فوراً' });
+      else steps.push({ ok: true, text: 'دخول الإيميل رد (' + (msg || res.status) + ')' });
+    } catch (e) { steps.push({ ok: false, text: 'تعذر فحص دخول الإيميل' }); }
     if (c.googleClientId && c.googleClientId.indexOf('PASTE') !== 0 && /apps\.googleusercontent\.com/.test(c.googleClientId)) steps.push({ ok: true, text: 'Google Client ID موجود (فاضل تفعيل الـ provider + redirect URI)' });
     else steps.push({ ok: false, text: 'حط الـ googleClientId (نوع Web) في firebase-config.js لدخول جوجل' });
     return steps;
