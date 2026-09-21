@@ -42,6 +42,15 @@
     try { return 'https://' + chrome.runtime.id + '.chromiumapp.org/'; }
     catch (_) { return ''; }
   }
+  function showGoogleErr() {
+    const box = $('googleErrBox'), uri = $('googleErrUri');
+    if (uri) uri.textContent = deviceRedirect();
+    if (box) box.classList.add('show');
+  }
+  function hideGoogleErr() {
+    const box = $('googleErrBox');
+    if (box) box.classList.remove('show');
+  }
 
   function bindOnce() {
     if (bindOnce._done) return;
@@ -78,13 +87,28 @@
     });
     if ($('btnGoogle')) $('btnGoogle').addEventListener('click', async () => {
       try {
+        hideGoogleErr();
         say('⏳ جاري فتح دخول جوجل...');
         await S.signInWithGoogle();
         say('✅ نورت! جاري جلب نسختك ☁️⬇️');
         try { await S.syncOnStart(); } catch (_) {}
         if (typeof renderAll === 'function') renderAll();
         renderAccount();
-      } catch (e) { say('❌ ' + e.message); }
+      } catch (e) {
+        const msg = e.message || '';
+        say('❌ ' + msg);
+        if (/redirect/i.test(msg)) showGoogleErr();
+      }
+    });
+    if ($('btnCopyErrUri')) $('btnCopyErrUri').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(deviceRedirect());
+        say('📋 اتنسخ رابط الـ redirect — الصقه في Google Cloud واضغط Save');
+      } catch (e) { say('❌ فشل النسخ: ' + e.message); }
+    });
+    if ($('btnGoogleRetry')) $('btnGoogleRetry').addEventListener('click', () => {
+      hideGoogleErr();
+      if ($('btnGoogle')) $('btnGoogle').click();
     });
     if ($('syncAuto')) $('syncAuto').addEventListener('change', async () => {
       const p = await S.getPrefs();

@@ -63,12 +63,13 @@ taskflo/
 
 1. في Firebase: `Authentication → Add new provider → Google → Enable` (اختار support email) → Save
 2. افتح [Google Cloud Console](https://console.cloud.google.com) على نفس المشروع (`taskflow-ad5fe`) → `APIs & Services → Credentials → Create Credentials → OAuth client ID`
-3. اختار النوع **Web application** وسمّيه `taskflo-ext`
-4. تحت **Authorized redirect URIs** ضيف الرابط ده (هات الـ ID من `chrome://extensions` تحت اسم TaskFlow Pro):
+3. ⚠️ اختار النوع **Web application** حصراً (مش Chrome Extension) وسمّيه `taskflo-ext`
+4. تحت **Authorized redirect URIs** ضيف الرابط ده **بالسلاش `/` في الآخر بالظبط** (انسخه من زرار 📋 رابط الجهاز في تاب حسابي — أو من صندوق الخطأ لو ظهر):
    ```
    https://<EXTENSION_ID>.chromiumapp.org/
    ```
    مثال: `https://abcdefghijklmnopabcdefghijklmnop.chromiumapp.org/`
+   ثم Save واستنى **دقيقة أو دقيقتين** قبل التجربة (الانتشار بياخد وقت)
 5. دوس Create وانسخ الـ **Client ID** وابعتهولي — أحطه في `firebase-config.js` وأعمل push
 6. على أي جهاز تاني: نفس الـ Client شغال، بس ضيف الـ redirect URI بتاع الـ extension ID بتاع الجهاز ده (Edit على نفس الـ client → Add URI → Save) — مرة واحدة لكل جهاز
 
