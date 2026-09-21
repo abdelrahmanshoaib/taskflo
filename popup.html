@@ -663,6 +663,16 @@
 
 <!-- ── DASHBOARD PANEL ── -->
 <div class="panel active" id="panel-dashboard">
+  <div class="dash-card" id="dashAccCard" style="display:flex;align-items:center;gap:10px">
+    <span style="width:38px;height:38px;border-radius:50%;background:var(--primary-grad);display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </span>
+    <div style="flex:1;min-width:0">
+      <div id="dashAccText" style="font-weight:700;font-size:13px">☁️ الحساب السحابي</div>
+      <div id="dashAccSub" style="font-size:11px;color:var(--muted)">...</div>
+    </div>
+    <button class="mini-btn go" id="dashAccBtn">حسابي</button>
+  </div>
   <div class="add-bar">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--faint);flex-shrink:0"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     <input type="text" id="dashQuickAdd" placeholder="مهمة سريعة + ✨ مسودة ذكية..." />

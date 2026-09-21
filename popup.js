@@ -174,6 +174,8 @@ function switchTab(name) {
   const btn = document.querySelector('.tab[data-tab="' + name + '"]');
   if (btn) btn.click();
 }
+const dashAccBtn = document.getElementById('dashAccBtn');
+if (dashAccBtn) dashAccBtn.addEventListener('click', () => switchTab('account'));
 
 // ─── Toast ─────────────────────────────────────────────
 let toastTimer = null;
@@ -1060,7 +1062,25 @@ function dashRow(html, btns) {
   });
   return d;
 }
+// ─── Dashboard account status card (reads TaskfloSync session, no dup auth)
+async function renderDashAccount() {
+  try {
+    if (!document.getElementById('dashAccCard')) return;
+    const txt = document.getElementById('dashAccText');
+    const sub = document.getElementById('dashAccSub');
+    let sess = null;
+    try { if (window.TaskfloSync) sess = await window.TaskfloSync.getSession(); } catch (e) {}
+    if (sess && sess.email) {
+      txt.textContent = '☁️ ' + sess.email;
+      sub.textContent = 'مسجل — المزامنة التلقائية شغالة';
+    } else {
+      txt.textContent = '☁️ الحساب السحابي';
+      sub.textContent = 'غير مسجل — الداتا محلية فقط';
+    }
+  } catch (e) {}
+}
 function renderDashboard() {
+  renderDashAccount();
   const t = todayStr();
   const open = tasks.filter(x => !x.archived);
   const todays = open.filter(isToday);
