@@ -2492,7 +2492,11 @@ function sanitizeAdHtml(html) {
   try {
     const tpl = document.createElement('template');
     tpl.innerHTML = String(html || '');
-    tpl.content.querySelectorAll('script, iframe, object, embed, link, meta, style, form, input, button, textarea, select').forEach(n => n.remove());
+    tpl.content.querySelectorAll('script, iframe, object, embed, link, meta, form, input, button, textarea, select').forEach(n => n.remove());
+    // NOTE: <style> is intentionally KEPT (removed from the strip list above) so
+    // published ad code keeps its CSS. Safe: <style> can't run JS, scripts /
+    // event handlers / javascript: URLs are still stripped, and announcements
+    // are admin-write-only (see firestore.rules).
     tpl.content.querySelectorAll('*').forEach(el => {
       Array.from(el.attributes).forEach(a => {
         const n = a.name.toLowerCase();
