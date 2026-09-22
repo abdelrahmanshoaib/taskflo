@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TaskFlow Pro</title>
 <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Almarai:wght@300;400;700;800&family=Tajawal:wght@400;500;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #eef2f7; --surface: rgba(255,255,255,0.55); --surface2: rgba(255,255,255,0.72);
@@ -698,6 +699,16 @@
   }
   .deen-done { opacity: .65; }
   .adhkar-check { font-size: 20px; }
+  /* ── Fonts & sizes (v2.6) ── */
+  [data-font="cairo"] { --font: 'Cairo', 'Satoshi', sans-serif; }
+  [data-font="almarai"] { --font: 'Almarai', 'Satoshi', sans-serif; }
+  [data-font="tajawal"] { --font: 'Tajawal', 'Satoshi', sans-serif; }
+  [data-font="plex"] { --font: 'IBM Plex Sans Arabic', 'Satoshi', sans-serif; }
+  :root { --zoom: 1; }
+  [data-fsize="sm"] { --zoom: 0.9; }
+  [data-fsize="lg"] { --zoom: 1.1; }
+  [data-fsize="xl"] { --zoom: 1.2; }
+  body { zoom: var(--zoom, 1); }
 </style>
 </head>
 <body>
@@ -710,7 +721,7 @@
         <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
       </svg>
     </span>
-    TaskFlow Pro <span class="ver-badge">v2.5</span>
+    TaskFlow Pro <span class="ver-badge">v2.6</span>
   </div>
   <div class="header-actions">
     <button class="icon-btn" id="btnTheme" title="تغيير المظهر">
@@ -1391,6 +1402,25 @@
         <div class="grow">مستوى الصوت</div>
         <input type="range" class="vol" id="ntVolume" min="0" max="100" value="80" />
         <button class="mini-btn" id="ntTestSound">تجربة 🔊</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">الخط | Font</label>
+      <div class="seg-row" id="fontRow" style="flex-wrap:wrap">
+        <button class="seg-btn" data-font="satoshi" style="font-family:'Satoshi',sans-serif">Satoshi</button>
+        <button class="seg-btn" data-font="cairo" style="font-family:'Cairo',sans-serif">كايرو</button>
+        <button class="seg-btn" data-font="almarai" style="font-family:'Almarai',sans-serif">المراعي</button>
+        <button class="seg-btn" data-font="tajawal" style="font-family:'Tajawal',sans-serif">تجوال</button>
+        <button class="seg-btn" data-font="plex" style="font-family:'IBM Plex Sans Arabic',sans-serif">بلكس</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">حجم الخط | Size</label>
+      <div class="seg-row" id="sizeRow">
+        <button class="seg-btn" data-fsize="sm">صغير</button>
+        <button class="seg-btn" data-fsize="md">عادي</button>
+        <button class="seg-btn" data-fsize="lg">كبير</button>
+        <button class="seg-btn" data-fsize="xl">كبير جداً</button>
       </div>
     </div>
     <div class="modal-actions">

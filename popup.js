@@ -111,7 +111,7 @@ function migrate() {
   if (!Array.isArray(focusSessions)) focusSessions = [];
   settings = Object.assign({ dark: false, work: 25, short: 5, long: 15, auto: false, sound: true, overdueNotify: true }, settings || {});
   settings.health = Object.assign({ enabled: false, every: 30 }, (settings && settings.health) || {});
-  settings.ui = Object.assign({ accent: 'teal', mode: 'light', glass: 'on', density: 'comfortable' }, settings.ui || {});
+  settings.ui = Object.assign({ accent: 'teal', mode: 'light', glass: 'on', density: 'comfortable', font: 'satoshi', fsize: 'md' }, settings.ui || {});
   settings.notify = Object.assign({ prayer: true, prayerMins: 5, prayerExact: true, tasks: true, overdue: true, sound: true, volume: 80 }, settings.notify || {});
   if (settings.sound === undefined) settings.sound = settings.notify.sound !== false;
   if (settings.volume === undefined) settings.volume = settings.notify.volume;
@@ -258,6 +258,10 @@ function applyUI() {
   document.querySelectorAll('#modeRow .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === (ui.mode || 'light')));
   document.querySelectorAll('#glassRow .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.glass === (ui.glass || 'on')));
   document.querySelectorAll('#densityRow .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.density === (ui.density || 'comfortable')));
+  document.body.setAttribute('data-font', ui.font || 'satoshi');
+  document.body.setAttribute('data-fsize', ui.fsize || 'md');
+  document.querySelectorAll('#fontRow .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.font === (ui.font || 'satoshi')));
+  document.querySelectorAll('#sizeRow .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.fsize === (ui.fsize || 'md')));
   applyNotifyUI();
 }
 // ─── Notifications settings UI ─────────────────────────
@@ -326,6 +330,19 @@ document.getElementById('densityRow').addEventListener('click', e => {
   const b = e.target.closest('.seg-btn');
   if (!b) return;
   settings.ui.density = b.dataset.density;
+  applyUI(); save();
+});
+document.getElementById('fontRow').addEventListener('click', e => {
+  const b = e.target.closest('.seg-btn');
+  if (!b) return;
+  settings.ui.font = b.dataset.font;
+  applyUI(); save();
+  toast('🔤 خط ' + b.textContent.trim());
+});
+document.getElementById('sizeRow').addEventListener('click', e => {
+  const b = e.target.closest('.seg-btn');
+  if (!b) return;
+  settings.ui.fsize = b.dataset.fsize;
   applyUI(); save();
 });
 

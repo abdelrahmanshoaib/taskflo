@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "TaskFlow Pro",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApQcjmd7hONbs7ipUddWlXav1WzNX9WGfYpVLu5Nxu+jnVErIuaPUI2cmlfqUCrCuCK3t26DdEDKEV+c6uphXtBLJZFYz/0ygdyyxzyGGVCF53yuVMb6F4vZTuOdI4BS+ndSQEseMGR2vrJQvmqFZwYyeVeFE+vX+sQN5z6bI8RZVQc9COs5fvPLClC1hjypqlkz6+O38vbLKAH0GOBrNEqPIjx7ldasCROq3LNLbQLQvCw83CHSazWqtPRNCJDFm0YaPEZpLK3fi8ywbP4CwkG8XsiU6OgtqqVt9EMyNxkEzEASbqx2w+MK5aJ2cyYRRvGMHJO+ECksDX/77SlVWDQIDAQAB",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "description": "TaskFlow Pro v2 — مهام + مشاريع + تقويم + أهداف + بومودورو + حساب سحابي",
   "action": {
     "default_popup": "popup.html",
