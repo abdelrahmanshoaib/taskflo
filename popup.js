@@ -112,6 +112,13 @@ function migrate() {
   settings = Object.assign({ dark: false, work: 25, short: 5, long: 15, auto: false, sound: true, overdueNotify: true }, settings || {});
   settings.health = Object.assign({ enabled: false, every: 30 }, (settings && settings.health) || {});
   settings.ui = Object.assign({ accent: 'teal', mode: 'light', glass: 'on', density: 'comfortable' }, settings.ui || {});
+  settings.notify = Object.assign({ prayer: true, prayerMins: 5, prayerExact: true, tasks: true, overdue: true, sound: true, volume: 80 }, settings.notify || {});
+  if (settings.sound === undefined) settings.sound = settings.notify.sound !== false;
+  if (settings.volume === undefined) settings.volume = settings.notify.volume;
+  if (settings.overdueNotify === undefined) settings.overdueNotify = settings.notify.overdue !== false;
+  settings.deen = Object.assign({ adhkarMorning: true, morningTime: '06:30', adhkarEvening: true, eveningTime: '17:30', wird: '', adhkarDone: {}, wirdDone: {}, opens: 0 }, settings.deen || {});
+  settings.deen.adhkarDone = settings.deen.adhkarDone || {};
+  settings.deen.wirdDone = settings.deen.wirdDone || {};
   settings.prayer = Object.assign({ city: 'Cairo', country: 'Egypt', method: 5 }, (settings || {}).prayer || {});
   if (typeof prayerDone !== 'object' || !prayerDone) prayerDone = {};
 }
@@ -163,6 +170,7 @@ document.querySelectorAll('.tab').forEach(t => {
     if (t.dataset.tab === 'table') renderTable();
     if (t.dataset.tab === 'projects') renderProjects();
     if (t.dataset.tab === 'routines') renderRoutines();
+    if (t.dataset.tab === 'deen') { renderPrayer(); renderDeenExtras(); }
     if (t.dataset.tab === 'calendar') renderCalendar();
     if (t.dataset.tab === 'goals') renderGoals();
     if (t.dataset.tab === 'pomodoro') renderPomoExtras();
@@ -195,6 +203,36 @@ if (prayerSaveBtn) prayerSaveBtn.addEventListener('click', async () => {
   try { await fetchPrayerTimings(true); schedulePrayerAlarms(); } catch (e) { toast('⚠️ تعذر الجلب — تحقق من اسم المدينة'); }
   renderPrayer(true);
 });
+// Deen buttons (adhkar + wird)
+const adhkarMBtn = document.getElementById('adhkarMorningDone');
+if (adhkarMBtn) adhkarMBtn.addEventListener('click', () => toggleAdhkarDone('morning'));
+const adhkarEBtn = document.getElementById('adhkarEveningDone');
+if (adhkarEBtn) adhkarEBtn.addEventListener('click', () => toggleAdhkarDone('evening'));
+const adhkarMOn = document.getElementById('adhkarMorningOn');
+if (adhkarMOn) adhkarMOn.addEventListener('change', () => { settings.deen.adhkarMorning = adhkarMOn.checked; save(); scheduleAdhkar(); renderDeenExtras(); });
+const adhkarEOn = document.getElementById('adhkarEveningOn');
+if (adhkarEOn) adhkarEOn.addEventListener('change', () => { settings.deen.adhkarEvening = adhkarEOn.checked; save(); scheduleAdhkar(); renderDeenExtras(); });
+const adhkarMAt = document.getElementById('adhkarMorningAt');
+if (adhkarMAt) adhkarMAt.addEventListener('change', () => { settings.deen.morningTime = adhkarMAt.value || '06:30'; save(); scheduleAdhkar(); renderDeenExtras(); });
+const adhkarEAt = document.getElementById('adhkarEveningAt');
+if (adhkarEAt) adhkarEAt.addEventListener('change', () => { settings.deen.eveningTime = adhkarEAt.value || '17:30'; save(); scheduleAdhkar(); renderDeenExtras(); });
+const wirdSaveBtn = document.getElementById('wirdSave');
+if (wirdSaveBtn) wirdSaveBtn.addEventListener('click', () => {
+  const gi = document.getElementById('wirdGoal');
+  settings.deen.wird = gi ? gi.value.trim() : '';
+  save(); renderDeenExtras();
+  toast('📖 حُفظ هدف الورد');
+});
+const wirdDoneBtn = document.getElementById('wirdDoneBtn');
+if (wirdDoneBtn) wirdDoneBtn.addEventListener('click', () => {
+  try {
+    settings.deen.wirdDone = settings.deen.wirdDone || {};
+    const k = prayerDateKey();
+    settings.deen.wirdDone[k] = !settings.deen.wirdDone[k];
+    save(); renderDeenExtras();
+    if (settings.deen.wirdDone[k]) toast('📖 تقبل الله وردك 🤍');
+  } catch (e) {}
+});
 
 // ─── Toast ─────────────────────────────────────────────
 let toastTimer = null;
@@ -220,6 +258,36 @@ function applyUI() {
   document.querySelectorAll('#modeRow .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === (ui.mode || 'light')));
   document.querySelectorAll('#glassRow .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.glass === (ui.glass || 'on')));
   document.querySelectorAll('#densityRow .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.density === (ui.density || 'comfortable')));
+  applyNotifyUI();
+}
+// ─── Notifications settings UI ─────────────────────────
+function applyNotifyUI() {
+  try {
+    const n = (settings && settings.notify) || {};
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+    set('ntPrayer', n.prayer !== false);
+    set('ntPrayerExact', n.prayerExact !== false);
+    set('ntTasks', n.tasks !== false);
+    set('ntOverdue', settings.overdueNotify !== false && n.overdue !== false);
+    set('ntSound', settings.sound !== false && n.sound !== false);
+    const mins = document.getElementById('ntPrayerMins');
+    if (mins) mins.value = String([0, 5, 10, 15].includes(Number(n.prayerMins)) ? Number(n.prayerMins) : 5);
+    const vol = document.getElementById('ntVolume');
+    if (vol) vol.value = settings.volume !== undefined ? settings.volume : 80;
+  } catch (e) {}
+}
+function bindNotifyUI() {
+  const on = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('change', () => { fn(el); save(); }); };
+  on('ntPrayer', el => { settings.notify.prayer = el.checked; prayerScheduledKey = ''; schedulePrayerAlarms(); toast(el.checked ? '🔔 تذكير الصلاة شغال' : '🔕 تذكير الصلاة متوقف'); });
+  on('ntPrayerExact', el => { settings.notify.prayerExact = el.checked; prayerScheduledKey = ''; schedulePrayerAlarms(); });
+  on('ntTasks', el => { settings.notify.tasks = el.checked; toast(el.checked ? '🔔 تذكيرات المهام شغالة' : '🔕 تذكيرات المهام متوقفة'); });
+  on('ntOverdue', el => { settings.notify.overdue = el.checked; settings.overdueNotify = el.checked; });
+  on('ntSound', el => { settings.notify.sound = el.checked; settings.sound = el.checked; if (el.checked) playBeep(); });
+  on('ntVolume', el => { settings.volume = Number(el.value) || 0; settings.notify.volume = settings.volume; });
+  const mins = document.getElementById('ntPrayerMins');
+  if (mins) mins.addEventListener('change', () => { settings.notify.prayerMins = Number(mins.value) || 0; prayerScheduledKey = ''; schedulePrayerAlarms(); save(); });
+  const tst = document.getElementById('ntTestSound');
+  if (tst) tst.addEventListener('click', () => playBeep());
 }
 document.getElementById('btnTheme').addEventListener('click', () => {
   settings.ui = settings.ui || {};
@@ -523,6 +591,7 @@ function logTime(id, minutes) {
 
 function setReminder(task) {
   if (!task.reminder) return;
+  try { if (settings.notify && settings.notify.tasks === false) return; } catch (e) {}
   const when = new Date(task.reminder).getTime();
   if (when > Date.now()) {
     try {
@@ -543,7 +612,7 @@ function snoozeReminder(id, minutes) {
   toast('😴 غفوة ' + (minutes || 10) + ' دقائق');
 }
 function renderAll() {
-  renderDashboard(); renderTasks(); renderTable(); renderProjects(); renderRoutines(); renderCalendar(); renderGoals(); renderPomoExtras();
+  renderDashboard(); renderTasks(); renderTable(); renderProjects(); renderRoutines(); renderDeenExtras(); renderCalendar(); renderGoals(); renderPomoExtras();
 }
 
 // ─── Task filter helpers (v2) ──────────────────────────
@@ -923,17 +992,19 @@ function persistPomoState() {
   } else pomoState = null;
   save();
 }
-function playBeep() {
+function playBeep(volOverride) {
   if (!settings.sound) return;
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return;
+    const vol = Math.min(100, Math.max(0, (volOverride !== undefined ? volOverride : (settings.volume !== undefined ? settings.volume : 80)))) / 100;
+    if (vol <= 0) return;
     const ctx = new Ctx();
     const o = ctx.createOscillator(), g = ctx.createGain();
     o.connect(g); g.connect(ctx.destination);
     o.frequency.value = 880; o.type = 'sine';
     g.gain.setValueAtTime(0.001, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.4, ctx.currentTime + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.05 + vol * 0.5, ctx.currentTime + 0.05);
     g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
     o.start(); o.stop(ctx.currentTime + 0.65);
   } catch(e) {}
@@ -1879,23 +1950,39 @@ async function fetchPrayerTimings(force) {
   save();
   return prayerCache;
 }
+function prayerNotifyCfg() {
+  const n = (settings && settings.notify) || {};
+  return {
+    on: n.prayer !== false,
+    mins: [0, 5, 10, 15].includes(Number(n.prayerMins)) ? Number(n.prayerMins) : 5,
+    exact: n.prayerExact !== false,
+    sound: n.sound !== false && settings.sound !== false
+  };
+}
 function schedulePrayerAlarms() {
   try {
     if (!prayerCache || !prayerCache.timings) return;
+    const cfgN = prayerNotifyCfg();
     const done = prayerDoneMap();
-    const key = prayerCache.date + '|' + PRAYER_ORDER.map(n => String(prayerCache.timings[n]).slice(0, 5)).join(',') + '|' + PRAYER_ORDER.map(n => done[n] ? '1' : '0').join('');
+    const key = prayerCache.date + '|' + PRAYER_ORDER.map(n => String(prayerCache.timings[n]).slice(0, 5)).join(',') + '|' + PRAYER_ORDER.map(n => done[n] ? '1' : '0').join('') + '|' + (cfgN.on ? '1' : '0') + cfgN.mins + (cfgN.exact ? '1' : '0');
     if (key === prayerScheduledKey) return; // already scheduled for this state (no dup alarms)
     const nowMs = Date.now();
     const now = new Date();
     PRAYER_ORDER.forEach(name => {
-      if (done[name]) return; // no reminder for completed prayers
+      // Clear stale alarms for this prayer first
+      try { chrome.runtime.sendMessage({ type: 'CLEAR_ALARM', name: 'prayer_' + name + '_' + prayerCache.date }); } catch (e) {}
+      try { chrome.runtime.sendMessage({ type: 'CLEAR_ALARM', name: 'prayerExact_' + name + '_' + prayerCache.date }); } catch (e) {}
+      if (!cfgN.on || done[name]) return; // off globally or prayer completed
       const mm = prayerToMin(prayerCache.timings[name]);
       if (mm === null) return;
       const at = new Date(now);
       at.setHours(Math.floor(mm / 60), mm % 60, 0, 0);
-      const when = at.getTime() - 5 * 60000;
-      if (when > nowMs) {
-        try { chrome.runtime.sendMessage({ type: 'SET_ALARM', name: 'prayer_' + name + '_' + prayerCache.date, when }); } catch (e) {}
+      const atMs = at.getTime();
+      if (cfgN.mins > 0 && atMs - cfgN.mins * 60000 > nowMs) {
+        try { chrome.runtime.sendMessage({ type: 'SET_ALARM', name: 'prayer_' + name + '_' + prayerCache.date, when: atMs - cfgN.mins * 60000 }); } catch (e) {}
+      }
+      if (cfgN.exact && atMs > nowMs) {
+        try { chrome.runtime.sendMessage({ type: 'SET_ALARM', name: 'prayerExact_' + name + '_' + prayerCache.date, when: atMs }); } catch (e) {}
       }
     });
     prayerScheduledKey = key;
@@ -1955,16 +2042,22 @@ async function renderPrayer(skipFetch) {
   const hero = prayerPickHero(T, done, nowMin);
   const doneCount = PRAYER_ORDER.filter(n => done[n]).length;
   prayerData = { hero, timings: T };
-  // Hero
+  // Hero (dashboard + deen)
   const nameEl = document.getElementById('prayerNextName');
   const progEl = document.getElementById('prayerProgress');
+  const deenLine = document.getElementById('deenNextLine');
+  const deenProg = document.getElementById('deenProgress');
   if (progEl) progEl.textContent = doneCount + '/5 اليوم';
-  if (hero && nameEl) {
-    if (hero.state === 'alldone') nameEl.textContent = '✅ خلصت صلوات اليوم — تقبل الله';
-    else if (hero.state === 'due') nameEl.textContent = '🕌 حان الآن: صلاة ' + PRAYER_AR[hero.name] + ' — علّم ✅';
-    else if (hero.state === 'missed') nameEl.textContent = '⚠️ فاتت صلاة ' + PRAYER_AR[hero.name] + ' — علّمها ✅';
-    else nameEl.textContent = 'صلاة ' + PRAYER_AR[hero.name] + (hero.done ? ' (تمت ✅)' : '');
+  if (deenProg) deenProg.textContent = doneCount + '/5 اليوم';
+  let heroTxt = '...';
+  if (hero) {
+    if (hero.state === 'alldone') heroTxt = '✅ خلصت صلوات اليوم — تقبل الله';
+    else if (hero.state === 'due') heroTxt = '🕌 حان الآن: صلاة ' + PRAYER_AR[hero.name] + ' — علّم ✅';
+    else if (hero.state === 'missed') heroTxt = '⚠️ فاتت صلاة ' + PRAYER_AR[hero.name] + ' — علّمها ✅';
+    else heroTxt = 'صلاة ' + PRAYER_AR[hero.name] + (hero.done ? ' (تمت ✅)' : '');
   }
+  if (nameEl) nameEl.textContent = heroTxt;
+  if (deenLine) deenLine.textContent = heroTxt;
   updatePrayerCountdown();
   if (!prayerTimer) prayerTimer = setInterval(updatePrayerCountdown, 1000);
   // List rows (stay visible; overdue rows highlighted until marked done)
@@ -1987,26 +2080,142 @@ async function renderPrayer(skipFetch) {
     listEl.appendChild(row);
   });
 }
+let lastPrayerKey = '';
 function updatePrayerCountdown() {
   try {
-    const el = document.getElementById('prayerCountdown');
-    if (!el || !prayerData || !prayerData.hero) return;
+    if (!prayerData || !prayerData.hero) return;
     const hero = prayerData.hero;
-    if (hero.state === 'alldone') { el.textContent = '00:00:00'; return; }
+    // Beep once when a prayer becomes due while popup is open (if sound on)
+    try {
+      const k = prayerDateKey() + '|' + hero.name + '|' + hero.state;
+      if (k !== lastPrayerKey) {
+        lastPrayerKey = k;
+        if (hero.state === 'due' && prayerNotifyCfg().sound) playBeep();
+      }
+    } catch (e) {}
     const now = new Date();
     const target = new Date(now);
-    let diffMin;
     if (hero.state === 'wait') {
-      diffMin = hero.atMin - (now.getHours() * 60 + now.getMinutes());
       target.setHours(Math.floor(hero.atMin / 60), hero.atMin % 60, 0, 0);
+    } else if (hero.state === 'alldone') {
+      document.querySelectorAll('.prayer-countdown-live').forEach(el => { el.textContent = '00:00:00'; });
+      return;
     } else {
       // due/missed: count UP since adhan (stays visible until marked done)
-      diffMin = -((now.getHours() * 60 + now.getMinutes()) - hero.atMin);
       target.setHours(Math.floor(hero.atMin / 60), hero.atMin % 60, 0, 0);
     }
     const diffSec = Math.round((target.getTime() - now.getTime()) / 1000);
-    el.textContent = (diffSec < 0 ? '+' : '') + prayerFmtDur(Math.abs(diffSec));
-    void diffMin;
+    const txt = (diffSec < 0 ? '+' : '') + prayerFmtDur(Math.abs(diffSec));
+    document.querySelectorAll('.prayer-countdown-live').forEach(el => { el.textContent = txt; });
+  } catch (e) {}
+}
+
+// ─── Deen: quotes, adhkar, wird ────────────────────────
+const DEEN_QUOTES = [
+  { t: '«خَيْرُكُمْ مَنْ تَعَلَّمَ الْقُرْآنَ وَعَلَّمَهُ»', s: 'حديث شريف — البخاري' },
+  { t: '«الطُّهُورُ شَطْرُ الْإِيمَانِ، وَالْحَمْدُ لِلَّهِ تَمْلَأُ الْمِيزَانَ»', s: 'حديث شريف — مسلم' },
+  { t: '«مَنْ صَلَّى الْبَرْدَيْنِ دَخَلَ الْجَنَّةَ» (الفجر والعصر)', s: 'حديث شريف — متفق عليه' },
+  { t: '«أَحَبُّ الْأَعْمَالِ إِلَى اللَّهِ أَدْوَمُهَا وَإِنْ قَلَّ»', s: 'حديث شريف — متفق عليه' },
+  { t: '«إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى»', s: 'حديث شريف — متفق عليه' },
+  { t: '«لَا تَحْقِرَنَّ مِنَ الْمَعْرُوفِ شَيْئًا، وَلَوْ أَنْ تَلْقَى أَخَاكَ بِوَجْهٍ طَلْقٍ»', s: 'حديث شريف — مسلم' },
+  { t: '«الْكَلِمَةُ الطَّيِّبَةُ صَدَقَةٌ»', s: 'حديث شريف — متفق عليه' },
+  { t: '﴿فَاذْكُرُونِي أَذْكُرْكُمْ وَاشْكُرُوا لِي وَلَا تَكْفُرُونِ﴾', s: 'البقرة 152' },
+  { t: '﴿أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ﴾', s: 'الرعد 28' },
+  { t: '﴿وَقُل رَّبِّ زِدْنِي عِلْمًا﴾', s: 'طه 114' },
+  { t: '«مَنْ سَلَكَ طَرِيقًا يَلْتَمِسُ فِيهِ عِلْمًا سَهَّلَ اللَّهُ لَهُ طَرِيقًا إِلَى الْجَنَّةِ»', s: 'حديث شريف — مسلم' },
+  { t: '«مَا نَقَصَتْ صَدَقَةٌ مِنْ مَالٍ»', s: 'حديث شريف — مسلم' },
+  { t: 'استغفر الله — «مَنْ لَزِمَ الِاسْتِغْفَارَ جَعَلَ اللَّهُ لَهُ مِنْ كُلِّ هَمٍّ فَرَجًا»', s: 'حديث شريف — أبو داود' },
+  { t: '﴿إِنَّ اللَّهَ وَمَلَائِكَتَهُ يُصَلُّونَ عَلَى النَّبِيِّ﴾ — أكثِر من الصلاة عليه ﷺ', s: 'الأحزاب 56' }
+];
+function deenQuote(idx) {
+  const q = DEEN_QUOTES[(idx || 0) % DEEN_QUOTES.length];
+  return q;
+}
+function wirdStreak() {
+  try {
+    const wd = (settings.deen && settings.deen.wirdDone) || {};
+    let s = 0, d = new Date();
+    if (!wd[prayerDateKey(d)]) d.setDate(d.getDate() - 1);
+    while (wd[prayerDateKey(d)]) { s++; d.setDate(d.getDate() - 1); }
+    return s;
+  } catch (e) { return 0; }
+}
+function renderDeenExtras() {
+  try {
+    const dn = (settings && settings.deen) || {};
+    // Quote of the open (rotates every popup open)
+    const q = deenQuote(dn.opens || 0);
+    const qEl = document.getElementById('deenQuote');
+    if (qEl) qEl.innerHTML = escHtml(q.t) + '<span class="q-src">' + escHtml(q.s) + '</span>';
+    const dq = document.getElementById('dashQuote');
+    if (dq) dq.textContent = '💡 ' + q.t.slice(0, 90);
+    // Adhkar toggles + times + done state
+    const k = prayerDateKey();
+    const ad = dn.adhkarDone || {};
+    const mDone = !!(ad[k] && ad[k].morning), eDone = !!(ad[k] && ad[k].evening);
+    const setRow = (rowId, btnId, done, label) => {
+      const row = document.getElementById(rowId), btn = document.getElementById(btnId);
+      if (row) row.classList.toggle('deen-done', done);
+      if (btn) { btn.textContent = done ? 'تم ✅' : 'تم ✅'; btn.classList.toggle('go', !done); }
+      void label;
+    };
+    setRow('adhkarMorningRow', 'adhkarMorningDone', mDone);
+    setRow('adhkarEveningRow', 'adhkarEveningDone', eDone);
+    const mt = document.getElementById('adhkarMorningTime'), et = document.getElementById('adhkarEveningTime');
+    if (mt) mt.textContent = dn.adhkarMorning ? ('· ⏰ ' + (dn.morningTime || '')) : '· التذكير متوقف';
+    if (et) et.textContent = dn.adhkarEvening ? ('· ⏰ ' + (dn.eveningTime || '')) : '· التذكير متوقف';
+    const mo = document.getElementById('adhkarMorningOn'), eo = document.getElementById('adhkarEveningOn');
+    const ma = document.getElementById('adhkarMorningAt'), ea = document.getElementById('adhkarEveningAt');
+    if (mo && mo.checked !== !!dn.adhkarMorning) mo.checked = !!dn.adhkarMorning;
+    if (eo && eo.checked !== !!dn.adhkarEvening) eo.checked = !!dn.adhkarEvening;
+    if (ma && dn.morningTime) ma.value = dn.morningTime;
+    if (ea && dn.eveningTime) ea.value = dn.eveningTime;
+    // Wird
+    const wg = document.getElementById('wirdGoal'), wt = document.getElementById('wirdGoalText');
+    if (wg && dn.wird) wg.value = dn.wird;
+    if (wt) wt.textContent = dn.wird ? ('📖 وردك: ' + dn.wird) : '📖 وردك اليومي';
+    const ws = document.getElementById('wirdStreak');
+    if (ws) {
+      const st = wirdStreak();
+      const doneToday = !!((dn.wirdDone || {})[k]);
+      ws.textContent = doneToday ? 'تم ورد اليوم ✅' + (st > 1 ? ' · 🔥 ' + st + ' أيام' : '') : (st ? '🔥 سلسلة ' + st + ' أيام — واصل!' : 'ابدأ سلسلتك النهاردة 🌱');
+    }
+    const wb = document.getElementById('wirdDoneBtn');
+    if (wb) wb.classList.toggle('go', !((dn.wirdDone || {})[k]));
+  } catch (e) {}
+}
+function toggleAdhkarDone(which) {
+  try {
+    settings.deen = settings.deen || {};
+    settings.deen.adhkarDone = settings.deen.adhkarDone || {};
+    const k = prayerDateKey();
+    settings.deen.adhkarDone[k] = settings.deen.adhkarDone[k] || {};
+    settings.deen.adhkarDone[k][which] = !settings.deen.adhkarDone[k][which];
+    save(); renderDeenExtras();
+    if (settings.deen.adhkarDone[k][which]) toast(which === 'morning' ? '🌅 تقبل الله أذكار الصباح' : '🌙 تقبل الله أذكار المساء');
+  } catch (e) {}
+}
+function nextDailyAt(timeStr) {
+  const m = String(timeStr || '').match(/(\d{1,2}):(\d{2})/);
+  const now = new Date();
+  const at = new Date(now);
+  if (m) at.setHours(parseInt(m[1], 10), parseInt(m[2], 10), 0, 0);
+  else at.setHours(6, 30, 0, 0);
+  if (at.getTime() <= now.getTime()) at.setDate(at.getDate() + 1);
+  return at.getTime();
+}
+function scheduleAdhkar() {
+  try {
+    const dn = (settings && settings.deen) || {};
+    const jobs = [
+      { on: dn.adhkarMorning, at: dn.morningTime, name: 'adhkar_morning' },
+      { on: dn.adhkarEvening, at: dn.eveningTime, name: 'adhkar_evening' }
+    ];
+    jobs.forEach(j => {
+      try { chrome.runtime.sendMessage({ type: 'CLEAR_ALARM', name: j.name }); } catch (e) {}
+      if (!j.on) return;
+      try { chrome.runtime.sendMessage({ type: 'SET_ALARM', name: j.name, when: nextDailyAt(j.at) }); } catch (e) {}
+    });
   } catch (e) {}
 }
 
@@ -2130,7 +2339,7 @@ function bindPomoSettings() {
   if (s) s.addEventListener('change', () => { settings.short = Math.min(60, Math.max(1, parseInt(s.value, 10) || 5)); if (!pomoRunning && pomoMode === 'short') { pomoRemaining = currentModeSecs(); pomoDuration = pomoRemaining; updatePomoDisplay(); } save(); setPomoModeUI(); });
   if (l) l.addEventListener('change', () => { settings.long = Math.min(90, Math.max(1, parseInt(l.value, 10) || 15)); if (!pomoRunning && pomoMode === 'long') { pomoRemaining = currentModeSecs(); pomoDuration = pomoRemaining; updatePomoDisplay(); } save(); setPomoModeUI(); });
   if (au) au.addEventListener('change', () => { settings.auto = au.checked; save(); });
-  if (so) so.addEventListener('change', () => { settings.sound = so.checked; save(); });
+  if (so) so.addEventListener('change', () => { settings.sound = so.checked; settings.notify.sound = so.checked; save(); applyNotifyUI(); });
 }
 function renderPomoExtras() {
   refreshPomoTaskSelect();
@@ -2187,12 +2396,20 @@ function renderPomoExtras() {
 function init() {
   applyUI();
   bindPomoSettings();
+  bindNotifyUI();
   refreshTemplateSelect();
   refreshFilterProjects();
   refreshRoutineProjects();
   bindHealthUI();
   ensureRoutines();
   applyHealthAlarm();
+  // Deen: quote rotation per open + adhkar alarms
+  try {
+    settings.deen = settings.deen || {};
+    settings.deen.opens = (settings.deen.opens || 0) + 1;
+    save();
+  } catch (e) {}
+  try { scheduleAdhkar(); } catch (e) {}
   // Pomodoro durations from settings + recovery after accidental close
   pomoDuration = currentModeSecs();
   pomoRemaining = pomoDuration;

@@ -36,12 +36,26 @@ function fireHealthBreak() {
   }
 }
 
+// ─── Adhkar rotating messages ───
+const ADHKAR_MORNING = [
+  'أصبحنا وأصبح الملك لله، والحمد لله — ابدأ يومك بذكر الله 🌅',
+  'اللهم بك أصبحنا وبك أمسينا وبك نحيا وبك نموت وإليك النشور ☀️',
+  'سبحان الله وبحمده (100 مرة) — حُطت خطاياه ولو كانت مثل زبد البحر 🤍',
+  'آية الكرسي — من قالها حين يصبح أُجير من الجن حتى يمسي 🛡️'
+];
+const ADHKAR_EVENING = [
+  'أمسينا وأمسى الملك لله، والحمد لله — اختم يومك بذكر الله 🌙',
+  'اللهم بك أمسينا وبك أصبحنا وبك نحيا وبك نموت وإليك المصير 🌌',
+  'المعوذات (3 مرات) — تكفيك من كل شيء 🤲',
+  'سبحان الله وبحمده، سبحان الله العظيم — كلمتان خفيفتان على اللسان 🌙'
+];
+
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name.startsWith('prayer_')) {
     const parts = alarm.name.split('_');
     const en = parts[1] || '';
     const ar = { Fajr: 'الفجر', Dhuhr: 'الظهر', Asr: 'العصر', Maghrib: 'المغرب', Isha: 'العشاء' }[en] || en;
-    notify('prayer_' + Date.now(), '🕌 بعد 5 دقائق: صلاة ' + ar, 'استعد للصلاة — تقبل الله 🕌');
+    notify('prayer_' + Date.now(), '🕌 اقتربت صلاة ' + ar, 'استعد للصلاة — تقبل الله 🕌');
   } else if (alarm.name.startsWith('reminder_')) {
     const taskId = alarm.name.replace('reminder_', '');
     chrome.storage.local.get(['tasks'], (result) => {
@@ -78,6 +92,27 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     notify('brk', '⚡ انتهت الاستراحة!', 'هيا نعمل مجددًا!');
   } else if (alarm.name === 'health_break') {
     fireHealthBreak();
+  } else if (alarm.name.startsWith('prayerExact_')) {
+    const parts = alarm.name.split('_');
+    const en = parts[1] || '';
+    const ar = { Fajr: 'الفجر', Dhuhr: 'الظهر', Asr: 'العصر', Maghrib: 'المغرب', Isha: 'العشاء' }[en] || en;
+    notify('prayerx_' + Date.now(), '🕌 حان الآن: صلاة ' + ar, 'تقبل الله منا ومنكم 🕌');
+  } else if (alarm.name === 'adhkar_morning' || alarm.name === 'adhkar_evening') {
+    const morning = alarm.name === 'adhkar_morning';
+    const pool = morning ? ADHKAR_MORNING : ADHKAR_EVENING;
+    try {
+      chrome.storage.local.get(['adhkarIdx'], (r) => {
+        const i = Number((r && r.adhkarIdx) || 0);
+        notify(alarm.name + '_' + Date.now(),
+          morning ? '🌅 أذكار الصباح' : '🌙 أذكار المساء',
+          pool[i % pool.length]);
+        try { chrome.storage.local.set({ adhkarIdx: i + 1 }); } catch (_) {}
+      });
+    } catch (_) {
+      notify(alarm.name + '_' + Date.now(), morning ? '🌅 أذكار الصباح' : '🌙 أذكار المساء', pool[0]);
+    }
+    // Self-sustaining daily: reschedule same alarm +24h
+    try { chrome.alarms.create(alarm.name, { when: Date.now() + 24 * 60 * 60000 }); } catch (_) {}
   } else if (alarm.name === 'overdue_sweep') {
     chrome.storage.local.get(['tasks', 'settings'], (result) => {
       const tasks = result.tasks || [];

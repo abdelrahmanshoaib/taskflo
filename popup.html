@@ -652,6 +652,52 @@
     word-break: break-all; background: rgba(0,0,0,0.07); color: inherit;
     padding: 6px 8px; border-radius: 8px;
   }
+
+  /* ── Deen + notifications settings (v2.6) ── */
+  .modal { max-height: 560px; overflow-y: auto; }
+  .notify-row {
+    display: flex; align-items: center; gap: 8px; font-size: 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 7px 10px;
+  }
+  .notify-row .grow { flex: 1; }
+  .switch { position: relative; width: 38px; height: 22px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 100%; height: 100%; position: absolute; margin: 0; cursor: pointer; }
+  .switch .track {
+    position: absolute; inset: 0; border-radius: 99px;
+    background: var(--border); transition: background var(--transition); pointer-events: none;
+  }
+  .switch .track::after {
+    content: ""; position: absolute; top: 3px; right: 3px; width: 16px; height: 16px;
+    border-radius: 50%; background: #fff; box-shadow: var(--shadow-sm);
+    transition: transform var(--transition);
+  }
+  .switch input:checked + .track { background: var(--primary); }
+  .switch input:checked + .track::after { transform: translateX(-16px); }
+  .mini-select {
+    padding: 4px 6px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface2); font-size: 11px; color: var(--text); font-family: var(--font);
+  }
+  input[type="range"].vol {
+    flex: 1; accent-color: var(--primary);
+  }
+  input[type="time"].time-input {
+    padding: 4px 6px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface2); font-size: 11px; color: var(--text); font-family: var(--font);
+  }
+  .quote-card {
+    background: var(--primary-grad); color: #fff; border: none;
+    border-radius: var(--radius-lg); padding: 12px 14px; box-shadow: var(--shadow);
+    font-size: 12.5px; line-height: 1.7; text-align: center;
+  }
+  [data-dark] .quote-card { color: #fff; }
+  .quote-card .q-src { display: block; margin-top: 6px; font-size: 10px; opacity: .85; }
+  .slim-quote {
+    font-size: 11px; color: var(--muted); text-align: center;
+    padding: 2px 8px; line-height: 1.7;
+  }
+  .deen-done { opacity: .65; }
+  .adhkar-check { font-size: 20px; }
 </style>
 </head>
 <body>
@@ -664,7 +710,7 @@
         <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
       </svg>
     </span>
-    TaskFlow Pro <span class="ver-badge">v2.2</span>
+    TaskFlow Pro <span class="ver-badge">v2.5</span>
   </div>
   <div class="header-actions">
     <button class="icon-btn" id="btnTheme" title="تغيير المظهر">
@@ -686,6 +732,7 @@
   <button class="tab" data-tab="table"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="3" y1="15" x2="21" y2="15"/></svg><span>الجدول</span></button>
   <button class="tab" data-tab="projects"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>المشاريع</span></button>
   <button class="tab" data-tab="routines"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg><span>روتين</span></button>
+  <button class="tab" data-tab="deen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/><path d="M17 3.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg><span>ديني</span></button>
   <button class="tab" data-tab="calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>التقويم</span></button>
   <button class="tab" data-tab="goals"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg><span>الأهداف</span></button>
   <button class="tab" data-tab="pomodoro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6"/></svg><span>بومودورو</span></button>
@@ -711,28 +758,13 @@
   </div>
   <div class="dash-grid" id="dashStats"></div>
   <div>
-    <div class="section-label">🕌 مواقيت الصلاة <span id="prayerHijri" style="font-weight:400"></span></div>
+    <div class="section-label">🕌 الصلاة القادمة</div>
     <div class="dash-card" id="prayerNext" style="background:var(--primary-grad);color:#fff;border-color:transparent;text-align:center;padding:12px">
-      <div style="font-size:11px;opacity:.9">الصلاة القادمة</div>
       <div id="prayerNextName" style="font-size:18px;font-weight:800">...</div>
-      <div id="prayerCountdown" style="font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;direction:ltr">--:--:--</div>
+      <div class="prayer-countdown-live" id="prayerCountdown" style="font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;direction:ltr">--:--:--</div>
       <div id="prayerProgress" style="font-size:11px;opacity:.9">0/5</div>
     </div>
-    <div class="dash-list" id="prayerList" style="margin-top:8px"></div>
-    <div class="adv-row" style="margin-top:8px">
-      <input class="adv-select" id="prayerCity" placeholder="المدينة (مثال: Cairo)" />
-      <input class="adv-select" id="prayerCountry" placeholder="الدولة (مثال: Egypt)" />
-    </div>
-    <div class="adv-row" style="margin-top:6px">
-      <select class="adv-select" id="prayerMethod">
-        <option value="5">مصر — الهيئة العامة للمساحة</option>
-        <option value="4">أم القرى — مكة</option>
-        <option value="8">الخليج</option>
-        <option value="3">رابطة العالم الإسلامي</option>
-        <option value="2">أمريكا الشمالية ISNA</option>
-      </select>
-      <button class="mini-btn go" id="prayerSave">حفظ الموقع</button>
-    </div>
+    <div class="slim-quote" id="dashQuote"></div>
   </div>
   <div>
     <div class="section-label" id="dashDateLabel">ملخص اليوم</div>
@@ -884,6 +916,66 @@
     </select>
   </div>
   <div id="routinesList" class="dash-list"></div>
+</div>
+
+<!-- ── DEEN PANEL ── -->
+<div class="panel" id="panel-deen">
+  <div class="quote-card" id="deenQuote">...</div>
+  <div>
+    <div class="section-label">🕌 مواقيت الصلاة <span id="prayerHijri" style="font-weight:400"></span></div>
+    <div class="dash-card" style="background:var(--primary-grad);color:#fff;border-color:transparent;text-align:center;padding:10px">
+      <div class="prayer-countdown-live" id="deenCountdown" style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;direction:ltr">--:--:--</div>
+      <div id="deenNextLine" style="font-size:12px;opacity:.95">...</div>
+      <div id="deenProgress" style="font-size:11px;opacity:.9">0/5</div>
+    </div>
+    <div class="dash-list" id="prayerList" style="margin-top:8px"></div>
+    <div class="adv-row" style="margin-top:8px">
+      <input class="adv-select" id="prayerCity" placeholder="المدينة (مثال: Cairo)" />
+      <input class="adv-select" id="prayerCountry" placeholder="الدولة (مثال: Egypt)" />
+    </div>
+    <div class="adv-row" style="margin-top:6px">
+      <select class="adv-select" id="prayerMethod">
+        <option value="5">مصر — الهيئة العامة للمساحة</option>
+        <option value="4">أم القرى — مكة</option>
+        <option value="8">الخليج</option>
+        <option value="3">رابطة العالم الإسلامي</option>
+        <option value="2">أمريكا الشمالية ISNA</option>
+      </select>
+      <button class="mini-btn go" id="prayerSave">حفظ الموقع</button>
+    </div>
+  </div>
+  <div>
+    <div class="section-label">🌅 الأذكار اليومية</div>
+    <div class="dash-list">
+      <div class="dash-row" id="adhkarMorningRow">
+        <div class="grow">🌅 أذكار الصباح <span style="color:var(--muted)" id="adhkarMorningTime"></span></div>
+        <button class="mini-btn" id="adhkarMorningDone">تم ✅</button>
+      </div>
+      <div class="dash-row" id="adhkarEveningRow">
+        <div class="grow">🌙 أذكار المساء <span style="color:var(--muted)" id="adhkarEveningTime"></span></div>
+        <button class="mini-btn" id="adhkarEveningDone">تم ✅</button>
+      </div>
+    </div>
+    <div class="adv-row" style="margin-top:6px">
+      <label class="check-line"><input type="checkbox" id="adhkarMorningOn" /> تذكير الصباح</label>
+      <input class="time-input" type="time" id="adhkarMorningAt" value="06:30" />
+    </div>
+    <div class="adv-row" style="margin-top:6px">
+      <label class="check-line"><input type="checkbox" id="adhkarEveningOn" /> تذكير المساء</label>
+      <input class="time-input" type="time" id="adhkarEveningAt" value="17:30" />
+    </div>
+  </div>
+  <div>
+    <div class="section-label">📖 الورد القرآني</div>
+    <div class="dash-row">
+      <div class="grow"><b id="wirdGoalText">وردك اليومي</b><br /><span style="color:var(--muted);font-size:11px" id="wirdStreak"></span></div>
+      <button class="mini-btn go" id="wirdDoneBtn">تم ✅</button>
+    </div>
+    <div class="adv-row" style="margin-top:6px">
+      <input class="adv-select" id="wirdGoal" placeholder="هدف الورد (مثال: جزء / 10 صفحات)" />
+      <button class="mini-btn" id="wirdSave">حفظ</button>
+    </div>
+  </div>
 </div>
 
 <!-- ── CALENDAR PANEL ── -->
@@ -1260,6 +1352,45 @@
       <div class="seg-row" id="densityRow">
         <button class="seg-btn" data-density="comfortable">مريح</button>
         <button class="seg-btn" data-density="compact">مضغوط</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">🔔 إشعارات الصلاة</label>
+      <div class="notify-row">
+        <div class="grow">تذكير قبل الأذان</div>
+        <label class="switch"><input type="checkbox" id="ntPrayer" /><span class="track"></span></label>
+      </div>
+      <div class="adv-row" style="margin-top:6px">
+        <select class="mini-select" id="ntPrayerMins" style="flex:1">
+          <option value="0">عند الأذان فقط</option>
+          <option value="5">قبل بـ 5 دقائق</option>
+          <option value="10">قبل بـ 10 دقائق</option>
+          <option value="15">قبل بـ 15 دقيقة</option>
+        </select>
+        <label class="check-line"><input type="checkbox" id="ntPrayerExact" /> تنبيه ثانٍ وقت الأذان</label>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">🔔 إشعارات المهام</label>
+      <div class="notify-row">
+        <div class="grow">تذكيرات المواعيد النهائية</div>
+        <label class="switch"><input type="checkbox" id="ntTasks" /><span class="track"></span></label>
+      </div>
+      <div class="notify-row" style="margin-top:6px">
+        <div class="grow">تنبيه المهام المتأخرة</div>
+        <label class="switch"><input type="checkbox" id="ntOverdue" /><span class="track"></span></label>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">🔊 صوت التنبيه</label>
+      <div class="notify-row">
+        <div class="grow">صوت داخل التطبيق</div>
+        <label class="switch"><input type="checkbox" id="ntSound" /><span class="track"></span></label>
+      </div>
+      <div class="notify-row" style="margin-top:6px">
+        <div class="grow">مستوى الصوت</div>
+        <input type="range" class="vol" id="ntVolume" min="0" max="100" value="80" />
+        <button class="mini-btn" id="ntTestSound">تجربة 🔊</button>
       </div>
     </div>
     <div class="modal-actions">

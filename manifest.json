@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TaskFlow Pro",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "TaskFlow Pro v2 — مهام + مشاريع + تقويم + أهداف + بومودورو + حساب سحابي",
   "action": {
     "default_popup": "popup.html",
