@@ -21,7 +21,7 @@ window.TASKFLO_FIREBASE = {
   projectId: 'taskflow-ad5fe',
   // Admin dashboard (email gate is UI-only; real enforcement is the UID in firestore.rules)
   ADMIN_EMAIL: 'abdelrahmanshoaib@gmail.com',
-  ADMIN_UID: 'PASTE_ADMIN_UID',
+  ADMIN_UID: 'KGwRkTCRWtY7v4Bc5lFrLwBxmqE2',
   // Google sign-in (Web-type OAuth client from Google Cloud → Credentials).
   // Send the Client ID here and I'll wire it; redirect URI per device:
   //   https://<EXTENSION_ID>.chromiumapp.org/  (find ID at chrome://extensions)
