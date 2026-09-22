@@ -1,3 +1,6 @@
 .DS_Store
 Thumbs.db
 *.log
+# Private extension key — NEVER commit (keeps extension ID stable)
+*.pem
+taskflo-key.pem
