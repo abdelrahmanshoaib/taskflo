@@ -11,6 +11,7 @@ let searchQ = '', fStatusV = '', fPriorityV = '', fProjectV = '', sortV = 'creat
 let calCursor = new Date(), calView = 'week';
 let settings = { dark: false, work: 25, short: 5, long: 15, auto: false, sound: true, overdueNotify: true };
 let prayerCache = null, prayerDone = {}, prayerData = null, prayerTimer = null, prayerScheduledKey = '';
+let adsCache = { at: 0, items: [] };
 const MODES = { work: 25*60, short: 5*60, long: 15*60 };
 const MODE_LABELS = { work: 'وقت العمل', short: 'استراحة قصيرة', long: 'استراحة كبيرة' };
 const PRI_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
@@ -49,7 +50,7 @@ function save() {
     chrome.storage.local.set({
       dbVersion: DB_VERSION, tasks, projects, projectMeta,
       appointments, goals, focusSessions, routines, settings,
-      prayerCache, prayerDone,
+      prayerCache, prayerDone, adsCache,
       pomoStats: { today: pomoSessionsToday, total: pomoSessionsTotal, day: new Date().toISOString().slice(0, 10) },
       pomoTaskId, pomoState
     });
@@ -125,7 +126,7 @@ function migrate() {
 }
 function load(cb) {
   try {
-    chrome.storage.local.get(['dbVersion','tasks','projects','projectMeta','appointments','goals','routines','focusSessions','settings','prayerCache','prayerDone','pomoStats','pomoTaskId','pomoState'], r => {
+    chrome.storage.local.get(['dbVersion','tasks','projects','projectMeta','appointments','goals','routines','focusSessions','settings','prayerCache','prayerDone','adsCache','pomoStats','pomoTaskId','pomoState'], r => {
       tasks = r.tasks || [];
       projects = r.projects || ['عام'];
       projectMeta = r.projectMeta || {};
@@ -135,6 +136,7 @@ function load(cb) {
       focusSessions = r.focusSessions || [];
       prayerCache = r.prayerCache || null;
       prayerDone = r.prayerDone || {};
+      adsCache = r.adsCache || { at: 0, items: [] };
       settings = r.settings || settings;
       const s = r.pomoStats || {};
       pomoSessionsToday = s.today || 0;
@@ -176,7 +178,7 @@ document.querySelectorAll('.tab').forEach(t => {
     if (t.dataset.tab === 'goals') renderGoals();
     if (t.dataset.tab === 'pomodoro') renderPomoExtras();
     if (t.dataset.tab === 'account' && typeof renderAccount === 'function') renderAccount();
-    if (t.dataset.tab === 'admin' && window.renderAdminUsers) { try { window.renderAdminUsers(); } catch (e) {} }
+    if (t.dataset.tab === 'admin' && window.renderAdminUsers) { try { window.renderAdminUsers(); } catch (e) {} if (window.renderAdminAds) { try { window.renderAdminAds(); } catch (e) {} } }
   });
 });
 // Global keyboard shortcuts: / search, n new task, Esc close
@@ -1254,6 +1256,7 @@ async function renderDashAccount() {
 function renderDashboard() {
   renderDashAccount();
   renderPrayer();
+  renderAds();
   const t = todayStr();
   const open = tasks.filter(x => !x.archived);
   const todays = open.filter(isToday);
@@ -2482,6 +2485,108 @@ function renderTasbihCard() {
     if (today) today.textContent = d ? String(Number(deedDayVal(d.id, prayerDateKey())) || 0) : '0';
     updateTasbihBadge();
   } catch (e) {}
+}
+
+// ─── Public announcements (published by admin, shown on dashboard)
+function sanitizeAdHtml(html) {
+  try {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = String(html || '');
+    tpl.content.querySelectorAll('script, iframe, object, embed, link, meta, style, form, input, button, textarea, select').forEach(n => n.remove());
+    tpl.content.querySelectorAll('*').forEach(el => {
+      Array.from(el.attributes).forEach(a => {
+        const n = a.name.toLowerCase();
+        if (n.startsWith('on') || ((n === 'href' || n === 'src' || n === 'action' || n === 'xlink:href') && /^\s*javascript:/i.test(a.value))) {
+          el.removeAttribute(a.name);
+        }
+      });
+    });
+    return tpl.innerHTML;
+  } catch (e) { return ''; }
+}
+function adField(v) {
+  if (!v) return '';
+  if (v.stringValue !== undefined) return v.stringValue;
+  if (v.booleanValue !== undefined) return v.booleanValue;
+  return '';
+}
+async function fetchAds(force) {
+  try {
+    if (!force && adsCache && adsCache.at && Date.now() - adsCache.at < 30 * 60 * 1000) return adsCache.items || [];
+    const c = window.TASKFLO_FIREBASE || {};
+    if (!c.projectId) return adsCache.items || [];
+    const res = await fetch('https://firestore.googleapis.com/v1/projects/' + c.projectId + '/databases/(default)/documents/announcements');
+    if (!res.ok) return adsCache.items || [];
+    const j = await res.json().catch(() => ({}));
+    let items = ((j && j.documents) || []).map(d => {
+      const f = d.fields || {};
+      return {
+        id: String(d.name || '').split('/').pop(),
+        title: adField(f.title), kind: adField(f.kind) || 'image',
+        content: adField(f.content), active: f.active ? !!adField(f.active) : true,
+        updatedAt: adField(f.updatedAt)
+      };
+    }).filter(a => a.active && a.content);
+    items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+    items = items.slice(0, 3);
+    adsCache = { at: Date.now(), items };
+    try { chrome.storage.local.set({ adsCache }); } catch (e) {}
+    return items;
+  } catch (e) { return (adsCache && adsCache.items) || []; }
+}
+function youtubeId(url) {
+  const m = String(url || '').match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{6,})/i);
+  return m ? m[1] : '';
+}
+async function renderAds() {
+  const slot = document.getElementById('adsSlot');
+  if (!slot) return;
+  const items = await fetchAds(false);
+  slot.innerHTML = '';
+  items.forEach(a => {
+    const card = document.createElement('div');
+    card.className = 'dash-card ad-card';
+    let body = '';
+    if (a.kind === 'video') {
+      const yid = youtubeId(a.content);
+      if (yid) body = '<iframe src="https://www.youtube-nocookie.com/embed/' + yid + '" loading="lazy" allow="accelerometer; encrypted-media; picture-in-picture" allowfullscreen></iframe>';
+      else if (/^\s*https:\/\//i.test(a.content)) body = '<video controls preload="none" src="' + escHtml(a.content.trim()) + '"></video>';
+      else return;
+    } else if (a.kind === 'code') {
+      const clean = sanitizeAdHtml(a.content);
+      if (!clean.trim()) return;
+      body = '<div class="ad-html">' + clean + '</div>';
+    } else {
+      if (!/^\s*https:\/\//i.test(a.content)) return;
+      const img = document.createElement('img');
+      img.src = a.content.trim();
+      img.alt = a.title || 'إعلان';
+      img.loading = 'lazy';
+      img.addEventListener('error', () => card.remove());
+      body = '';
+      if (a.title) {
+        const t = document.createElement('div');
+        t.className = 'ad-title';
+        t.textContent = a.title;
+        card.appendChild(t);
+      }
+      card.appendChild(img);
+      slot.appendChild(card);
+      return;
+    }
+    if (a.title) {
+      const t = document.createElement('div');
+      t.className = 'ad-title';
+      t.textContent = a.title;
+      card.appendChild(t);
+    }
+    const wrap = document.createElement('div');
+    wrap.innerHTML = body;
+    // Strip any script that slipped in (defense in depth; code already sanitized)
+    wrap.querySelectorAll('script').forEach(n => n.remove());
+    card.appendChild(wrap);
+    slot.appendChild(card);
+  });
 }
 
 // ─── Helpers ──────────────────────────────────────────

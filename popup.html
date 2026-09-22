@@ -721,6 +721,10 @@
     font-size: 26px; font-weight: 800; color: var(--primary);
     font-variant-numeric: tabular-nums; line-height: 1.2;
   }
+  .ad-card img, .ad-card video { width: 100%; display: block; border-radius: var(--radius-lg); }
+  .ad-card iframe { width: 100%; height: 200px; border: none; border-radius: var(--radius-lg); display: block; }
+  .ad-title { padding: 8px 12px 0; font-size: 12px; font-weight: 700; }
+  .ad-html { padding: 10px 12px; font-size: 12px; line-height: 1.7; }
 </style>
 </head>
 <body>
@@ -733,7 +737,7 @@
         <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
       </svg>
     </span>
-    TaskFlow Pro <span class="ver-badge">v2.9</span>
+    TaskFlow Pro <span class="ver-badge">v2.10</span>
   </div>
   <div class="header-actions">
     <button class="icon-btn" id="btnTheme" title="تغيير المظهر">
@@ -790,6 +794,7 @@
     </div>
     <div class="slim-quote" id="dashQuote"></div>
   </div>
+  <div id="adsSlot" style="display:flex;flex-direction:column;gap:8px"></div>
   <div>
     <div class="section-label" id="dashDateLabel">ملخص اليوم</div>
     <div class="progress-line" style="margin-bottom:8px"><div id="dashProgressFill" style="width:0%"></div></div>
@@ -1229,6 +1234,30 @@
     </div>
     <div class="acc-hint">التفعيل/الغلق بميعاد = حقل «ينتهي في». القواعد في <b>firestore.rules</b> تمنع الكتابة بعد الانتهاء (بتوقيت السيرفر). إظهار التبويب بالإيميل للراحة فقط — الحماية الحقيقية بالـ UID في القواعد.</div>
     <div id="adminUsersList" class="dash-list"></div>
+  </div>
+  <div class="acc-card">
+    <div class="section-label">📢 إعلانات الصفحة الرئيسية</div>
+    <div class="acc-status">تظهر للمستخدمين تحت بطاقة الصلاة في الرئيسية (صورة / فيديو / كود HTML مطهّر).</div>
+    <div class="form-group">
+      <label class="form-label">العنوان</label>
+      <input class="form-input" id="adTitle" placeholder="عنوان الإعلان (اختياري)" />
+    </div>
+    <div class="adv-row">
+      <select class="adv-select" id="adKind">
+        <option value="image">🖼️ صورة (رابط)</option>
+        <option value="video">🎬 فيديو (رابط mp4 أو يوتيوب)</option>
+        <option value="code">🧩 كود HTML</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">المحتوى (رابط https أو كود)</label>
+      <textarea class="form-input" id="adContent" dir="ltr" placeholder="https://..."></textarea>
+    </div>
+    <div class="acc-row">
+      <button class="mini-btn go" id="btnAdAdd" style="flex:1">➕ نشر الإعلان</button>
+      <button class="mini-btn" id="btnAdsRefresh">🔄 تحديث</button>
+    </div>
+    <div id="adminAdsList" class="dash-list"></div>
   </div>
 </div>
 

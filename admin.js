@@ -140,9 +140,108 @@
 
   window.renderAdminUsers = renderAdminUsers;
   window.TaskfloAdmin = { listUsers, getUserSub, setUserSub };
+  // ─── Announcements (image / video / code) ────────────
+  function adsCol() {
+    const c = cfg();
+    return 'https://firestore.googleapis.com/v1/projects/' + c.projectId + '/databases/(default)/documents/announcements';
+  }
+  async function listAds() {
+    const res = await fetch(adsCol());
+    if (!res.ok) throw new Error('ads list: ' + res.status);
+    const j = await res.json().catch(() => ({}));
+    return ((j && j.documents) || []).map(d => {
+      const f = d.fields || {};
+      return {
+        id: String(d.name || '').split('/').pop(),
+        title: fval(f.title), kind: fval(f.kind) || 'image',
+        content: fval(f.content), active: f.active ? !!fval(f.active) : true,
+        updatedAt: fval(f.updatedAt)
+      };
+    });
+  }
+  async function createAd(ad) {
+    const s = await window.TaskfloSync.getSession();
+    const res = await fetch(adsCol(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.idToken },
+      body: JSON.stringify({ fields: {
+        title: { stringValue: String(ad.title || '') },
+        kind: { stringValue: String(ad.kind || 'image') },
+        content: { stringValue: String(ad.content || '') },
+        active: { booleanValue: true },
+        updatedAt: { stringValue: new Date().toISOString() }
+      } })
+    });
+    if (!res.ok) throw new Error('ads create: ' + res.status);
+  }
+  async function setAdActive(id, active) {
+    const s = await window.TaskfloSync.getSession();
+    const res = await fetch(adsCol() + '/' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.idToken },
+      body: JSON.stringify({ fields: { active: { booleanValue: !!active } } })
+    });
+    if (!res.ok) throw new Error('ads update: ' + res.status);
+  }
+  async function deleteAd(id) {
+    const s = await window.TaskfloSync.getSession();
+    const res = await fetch(adsCol() + '/' + encodeURIComponent(id), {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + s.idToken }
+    });
+    if (!res.ok) throw new Error('ads delete: ' + res.status);
+  }
+  async function renderAdminAds() {
+    const list = $('adminAdsList');
+    if (!list) return;
+    try {
+      const ads = await listAds();
+      list.innerHTML = '';
+      if (!ads.length) list.innerHTML = '<div class="empty-state"><p>لا إعلانات — انشر أول إعلان 📢</p></div>';
+      ads.forEach(a => {
+        const card = document.createElement('div');
+        card.className = 'project-card' + (a.active ? '' : ' routine-off');
+        card.innerHTML = '<div class="project-header"><div>' +
+          '<div class="project-name">' + (a.kind === 'image' ? '🖼️' : a.kind === 'video' ? '🎬' : '🧩') + ' ' + esc(a.title || '(بدون عنوان)') + '</div>' +
+          '<div class="project-count">' + esc(String(a.content || '').slice(0, 60)) + '</div></div>' +
+          '<span style="font-size:11px;color:var(--muted)">' + (a.active ? '✅ ظاهر' : '⏸ مخفي') + '</span></div>' +
+          '<div style="display:flex;gap:6px;margin-top:8px">' +
+          '<button class="mini-btn ad-toggle">' + (a.active ? 'إخفاء' : 'إظهار') + '</button>' +
+          '<button class="mini-btn ad-del">حذف</button></div>';
+        card.querySelector('.ad-toggle').addEventListener('click', async () => {
+          try { await setAdActive(a.id, !a.active); renderAdminAds(); } catch (e) { if (typeof toast === 'function') toast('❌ ' + e.message); }
+        });
+        card.querySelector('.ad-del').addEventListener('click', async () => {
+          if (!confirm('حذف الإعلان؟')) return;
+          try { await deleteAd(a.id); renderAdminAds(); } catch (e) { if (typeof toast === 'function') toast('❌ ' + e.message); }
+        });
+        list.appendChild(card);
+      });
+    } catch (e) {
+      list.innerHTML = '<div class="empty-state"><p>تعذر الجلب: ' + esc(e.message) + '</p></div>';
+    }
+  }
   // Refresh button (bound once at load; list itself loads on tab open)
   try {
     const rb = document.getElementById('btnAdminRefresh');
     if (rb) rb.addEventListener('click', () => renderAdminUsers());
+    const ab = document.getElementById('btnAdAdd');
+    if (ab) ab.addEventListener('click', async () => {
+      try {
+        const title = ($('adTitle') && $('adTitle').value.trim()) || '';
+        const kind = ($('adKind') && $('adKind').value) || 'image';
+        const content = ($('adContent') && $('adContent').value.trim()) || '';
+        if (!content) { if (typeof toast === 'function') toast('⚠️ اكتب الرابط أو الكود'); return; }
+        if (kind !== 'code' && !/^\s*https:\/\//i.test(content)) { if (typeof toast === 'function') toast('⚠️ الرابط لازم يبدأ بـ https://'); return; }
+        await createAd({ title, kind, content });
+        if ($('adTitle')) $('adTitle').value = '';
+        if ($('adContent')) $('adContent').value = '';
+        if (typeof toast === 'function') toast('📢 اتنشر الإعلان');
+        renderAdminAds();
+      } catch (e) { if (typeof toast === 'function') toast('❌ ' + e.message); }
+    });
+    const ar = document.getElementById('btnAdsRefresh');
+    if (ar) ar.addEventListener('click', () => renderAdminAds());
   } catch (e) {}
+  window.renderAdminAds = renderAdminAds;
 })();

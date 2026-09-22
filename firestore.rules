@@ -36,6 +36,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Public announcements (admin publishes, everyone reads incl. logged-out preview)
+    match /announcements/{doc} {
+      allow read, list: if true;
+      allow write: if isAdmin();
+    }
+
     // App data: owner only; expired subscriptions lose WRITE (read kept so nothing is lost)
     match /users/{uid}/data/{doc=**} {
       allow read: if isOwner(uid);
