@@ -12,10 +12,16 @@
 //        }
 //      }
 // 4) Project Settings → General → Your apps → Web app (</>) → copy apiKey/authDomain/projectId here.
+// 5) ADMIN: Firebase Console → Authentication → Users → copy YOUR uid → paste below.
+//    Then open firestore.rules (in this repo) → replace PASTE_ADMIN_UID with the same uid
+//    → Firebase Console → Firestore → Rules → paste → Publish.
 window.TASKFLO_FIREBASE = {
   apiKey: 'AIzaSyA_5zBF9vTJcgIN2HA7eJsobFz23a7BqUo',
   authDomain: 'taskflow-ad5fe.firebaseapp.com',
   projectId: 'taskflow-ad5fe',
+  // Admin dashboard (email gate is UI-only; real enforcement is the UID in firestore.rules)
+  ADMIN_EMAIL: 'abdelrahmanshoaib@gmail.com',
+  ADMIN_UID: 'PASTE_ADMIN_UID',
   // Google sign-in (Web-type OAuth client from Google Cloud → Credentials).
   // Send the Client ID here and I'll wire it; redirect URI per device:
   //   https://<EXTENSION_ID>.chromiumapp.org/  (find ID at chrome://extensions)

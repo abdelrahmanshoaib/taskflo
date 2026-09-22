@@ -176,6 +176,7 @@ document.querySelectorAll('.tab').forEach(t => {
     if (t.dataset.tab === 'goals') renderGoals();
     if (t.dataset.tab === 'pomodoro') renderPomoExtras();
     if (t.dataset.tab === 'account' && typeof renderAccount === 'function') renderAccount();
+    if (t.dataset.tab === 'admin' && window.renderAdminUsers) { try { window.renderAdminUsers(); } catch (e) {} }
   });
 });
 // Global keyboard shortcuts: / search, n new task, Esc close
@@ -677,6 +678,23 @@ function snoozeReminder(id, minutes) {
 }
 function renderAll() {
   renderDashboard(); renderTasks(); renderTable(); renderProjects(); renderRoutines(); renderDeenExtras(); renderDeeds(); renderTasbihCard(); renderCalendar(); renderGoals(); renderPomoExtras();
+  refreshAdminVisibility();
+}
+// Admin tab visibility: shown only for the admin account (UI convenience;
+// real access control is request.auth.uid in firestore.rules).
+async function refreshAdminVisibility() {
+  try {
+    let show = false;
+    if (window.TaskfloSync && window.TaskfloSync.isAdmin) show = await window.TaskfloSync.isAdmin();
+    const btn = document.getElementById('tabAdmin');
+    const panel = document.getElementById('panel-admin');
+    if (btn) btn.style.display = show ? '' : 'none';
+    if (panel && !show && panel.classList.contains('active')) {
+      panel.classList.remove('active');
+      switchTab('dashboard');
+    }
+    // NOTE: user list fetches only on tab open / refresh button (not here) to save quota.
+  } catch (e) {}
 }
 
 // ─── Task filter helpers (v2) ──────────────────────────
@@ -2680,5 +2698,6 @@ function init() {
   try { updateTasbihBadge(); } catch (e) {}
   // v2.4: account panel + cloud auto-sync (after local data ready)
   try { if (typeof TaskfloAccountInit === 'function') TaskfloAccountInit(); else if (window.TaskfloAccountInit) window.TaskfloAccountInit(); } catch (_) {}
+  try { refreshAdminVisibility(); } catch (_) {}
 }
 load(init);

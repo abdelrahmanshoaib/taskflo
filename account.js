@@ -19,6 +19,16 @@
     if (formW) formW.style.display = sess ? 'none' : '';
     if (userW) userW.style.display = sess ? '' : 'none';
     if (sess && $('accUserEmail')) $('accUserEmail').textContent = sess.email || sess.uid;
+    if ($('accSubLine')) {
+      try {
+        const sub = await S.getSubStatus();
+        $('accSubLine').textContent = !sub.exists
+          ? '🎫 الاشتراك: كامل (بدون قيد)'
+          : (sub.state === 'active'
+            ? '🎫 الاشتراك: ' + (sub.plan || '') + (sub.expiresAt ? ' حتى ' + sub.expiresAt.slice(0, 16).replace('T', ' ') : ' ✅')
+            : '🎫 الاشتراك: ⛔ منتهي — المزامنة متوقفة والداتا محفوظة محلياً');
+      } catch (e) { $('accSubLine').textContent = '🎫 الاشتراك: ...'; }
+    }
     if ($('accStatus')) {
       $('accStatus').innerHTML = sess
         ? '✅ مسجل دخول: <b>' + esc(sess.email || sess.uid) + '</b>'

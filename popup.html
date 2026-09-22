@@ -733,7 +733,7 @@
         <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
       </svg>
     </span>
-    TaskFlow Pro <span class="ver-badge">v2.8</span>
+    TaskFlow Pro <span class="ver-badge">v2.9</span>
   </div>
   <div class="header-actions">
     <button class="icon-btn" id="btnTheme" title="تغيير المظهر">
@@ -760,6 +760,7 @@
   <button class="tab" data-tab="goals"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg><span>الأهداف</span></button>
   <button class="tab" data-tab="pomodoro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6"/></svg><span>بومودورو</span></button>
   <button class="tab" data-tab="account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>حسابي</span></button>
+  <button class="tab" data-tab="admin" id="tabAdmin" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M8.5 13 7 22l5-3 5 3-1.5-9"/></svg><span>الإدارة</span></button>
 </div>
 
 <!-- ── DASHBOARD PANEL ── -->
@@ -1186,6 +1187,7 @@
     </div>
     <div id="accUserWrap" style="display:none;flex-direction:column;gap:8px">
       <div class="acc-status">👤 <b id="accUserEmail"></b></div>
+      <div class="acc-status" id="accSubLine">🎫 الاشتراك: ...</div>
       <div class="acc-row">
         <button class="mini-btn go" id="btnPush">☁️⬆️ رفع</button>
         <button class="mini-btn" id="btnPull">☁️⬇️ تنزيل</button>
@@ -1214,6 +1216,19 @@
     <div class="acc-row">
       <button class="mini-btn" id="btnImportPaste">✅ استيراد الملصوق</button>
     </div>
+  </div>
+</div>
+
+<!-- ── ADMIN PANEL (visible to admin email only) ── -->
+<div class="panel" id="panel-admin">
+  <div class="acc-card">
+    <div class="section-label">👑 إدارة المستخدمين والاشتراكات</div>
+    <div class="acc-status" id="adminStatus">...</div>
+    <div class="acc-row">
+      <button class="mini-btn go" id="btnAdminRefresh" style="flex:1">🔄 تحديث القائمة</button>
+    </div>
+    <div class="acc-hint">التفعيل/الغلق بميعاد = حقل «ينتهي في». القواعد في <b>firestore.rules</b> تمنع الكتابة بعد الانتهاء (بتوقيت السيرفر). إظهار التبويب بالإيميل للراحة فقط — الحماية الحقيقية بالـ UID في القواعد.</div>
+    <div id="adminUsersList" class="dash-list"></div>
   </div>
 </div>
 
@@ -1491,5 +1506,6 @@
 <script src="sync.js"></script>
 <script src="popup.js"></script>
 <script src="account.js"></script>
+<script src="admin.js"></script>
 </body>
 </html>

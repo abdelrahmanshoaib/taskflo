@@ -21,6 +21,71 @@
     return 'https://firestore.googleapis.com/v1/projects/' + c.projectId +
       '/databases/(default)/documents/users/' + encodeURIComponent(uid) + '/data/main';
   }
+  function profilePath(uid) {
+    const c = cfg();
+    return 'https://firestore.googleapis.com/v1/projects/' + c.projectId +
+      '/databases/(default)/documents/users/' + encodeURIComponent(uid) + '/profile/info';
+  }
+  function subPath(uid) {
+    const c = cfg();
+    return 'https://firestore.googleapis.com/v1/projects/' + c.projectId +
+      '/databases/(default)/documents/users/' + encodeURIComponent(uid) + '/meta/subscription';
+  }
+  // Admin check: UID match (robust) with email fallback for display gating.
+  // NOTE: hiding UI by email is convenience only — real enforcement lives in firestore.rules.
+  async function isAdmin() {
+    try {
+      const s = await getSession();
+      if (!s) return false;
+      const c = cfg();
+      if (c.ADMIN_UID && c.ADMIN_UID !== 'PASTE_ADMIN_UID' && s.uid && s.uid === c.ADMIN_UID) return true;
+      return !!(s.email && c.ADMIN_EMAIL && String(s.email).toLowerCase() === String(c.ADMIN_EMAIL).toLowerCase());
+    } catch (e) { return false; }
+  }
+  // Heartbeat: lets the admin list users (best-effort, never breaks auth)
+  async function writeHeartbeat(sess, email) {
+    try {
+      if (!sess || !sess.uid || !sess.idToken) return;
+      await fetch(profilePath(sess.uid), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sess.idToken },
+        body: JSON.stringify({ fields: {
+          email: { stringValue: String(email || sess.email || '') },
+          updatedAt: { stringValue: new Date().toISOString() },
+          v: { stringValue: '2.9' }
+        } })
+      });
+    } catch (e) {}
+  }
+  // Subscription status of CURRENT user. No doc = grandfathered full access.
+  async function getSubStatus() {
+    try {
+      const s = await getSession();
+      if (!s || !s.uid || !s.idToken) return { exists: false, state: 'logged-out' };
+      const res = await fetch(subPath(s.uid), { headers: { Authorization: 'Bearer ' + s.idToken } });
+      if (res.status === 404) return { exists: false, state: 'full' };
+      if (!res.ok) return { exists: false, state: 'unknown' };
+      const j = await res.json();
+      const f = (j && j.fields) || {};
+      const gv = (k) => {
+        const v = f[k];
+        if (!v) return null;
+        if (v.stringValue !== undefined) return v.stringValue;
+        if (v.booleanValue !== undefined) return v.booleanValue;
+        return null;
+      };
+      const active = gv('active');
+      const expiresAt = gv('expiresAt');
+      const plan = gv('plan') || 'مجاني';
+      const expired = !!(expiresAt && new Date(expiresAt).getTime() <= Date.now());
+      const ok = (active === null || active === true || active === 'true') && !expired;
+      return { exists: true, state: ok ? 'active' : 'expired', active: ok, plan, expiresAt, expired };
+    } catch (e) { return { exists: false, state: 'unknown' }; }
+  }
+  async function requireActiveSub() {
+    const st = await getSubStatus();
+    if (st.exists && st.state === 'expired') throw new Error('⛔ الاشتراك منتهي — تواصل مع الإدارة للتجديد');
+  }
   function getSession() {
     return new Promise((resolve) => {
       try {
@@ -81,6 +146,7 @@
       expiresAt: Date.now() + (Number(j.expiresIn) || 3600) * 1000
     };
     await setSession(s);
+    writeHeartbeat(s, email); // best-effort, non-blocking
     return s;
   }
   async function signUp(email, password) {
@@ -190,6 +256,7 @@
 
   async function pushNow() {
     const s = await validSession();
+    await requireActiveSub();
     const b = collectLocal();
     const updatedAt = new Date().toISOString();
     b.exportedAt = updatedAt;
@@ -217,6 +284,7 @@
 
   async function pullNow() {
     const s = await validSession();
+    await requireActiveSub();
     const res = await fetch(docPath(s.uid), {
       headers: { Authorization: 'Bearer ' + s.idToken }
     });
@@ -325,7 +393,8 @@
   }
 
   window.TaskfloSync = {
-    isConfigured, getSession, getPrefs, setPrefs,
-    signUp, signIn, signInWithGoogle, signOut, pushNow, pullNow, schedulePush, syncOnStart, diagnoseCloud
+    isConfigured, getSession, getPrefs, setPrefs, isAdmin,
+    signUp, signIn, signInWithGoogle, signOut, pushNow, pullNow, schedulePush, syncOnStart, diagnoseCloud,
+    getSubStatus, writeHeartbeat
   };
 })();
