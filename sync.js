@@ -364,15 +364,19 @@
       else steps.push({ ok: true, text: 'الـ apiKey سليم' });
     } catch (e) { steps.push({ ok: false, text: 'تعذر الوصول لسيرفرات جوجل — اتأكد من الإنترنت' }); return steps; }
     try {
-      const res = await fetch('https://firestore.googleapis.com/v1/projects/' + c.projectId + '/databases/(default)/documents/users/__ping__/data/main');
-      if (res.status === 200) {
+      // NOTE: probe uses a random non-reserved ID (__xxx__ names always 400).
+      // Locked rules → 401/403. Open (test-mode) rules → 404 on the missing doc.
+      const probeId = 'zzprobe' + Math.floor(10000 + Math.random() * 89999);
+      const res = await fetch('https://firestore.googleapis.com/v1/projects/' + c.projectId + '/databases/(default)/documents/users/' + probeId + '/data/main');
+      if (res.status === 401 || res.status === 403) steps.push({ ok: true, text: 'Firestore مقفول بدون دخول (القواعد مطبقة ✅)' });
+      else if (res.status === 404) steps.push({ ok: false, text: '⚠️ خطر: القراءة مفتوحة للجميع! انشر قواعد firestore.rules (القواعد الحالية test mode)' });
+      else if (res.status === 200) {
         let leaked = false;
         try { const j = await res.json(); leaked = !!(j && j.fields && j.fields.payload); } catch (e) {}
         steps.push(leaked
           ? { ok: false, text: '⚠️ خطر: قراءة بدون دخول رجعت داتا! اقفل الـ Rules فوراً (per-user فقط)' }
           : { ok: true, text: 'Firestore متاح (الصلاحيات بتتحدد بالقواعد)' });
       }
-      else if (res.status === 401 || res.status === 403 || res.status === 404 || res.status === 400) steps.push({ ok: true, text: 'Firestore متاح ومقفول بدون دخول (الصلاحيات بتتحدد بالقواعد)' });
       else steps.push({ ok: true, text: 'Firestore رد (status ' + res.status + ')' });
     } catch (e) { steps.push({ ok: false, text: 'تعذر الوصول لـ Firestore — اتأكد من إنشاء الداتابيز' }); }
     // Email/Password provider probe (harmless failed login with fake address — no side effects)
