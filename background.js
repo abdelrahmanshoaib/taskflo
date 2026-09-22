@@ -154,3 +154,53 @@ chrome.runtime.onInstalled.addListener(() => {
     chrome.alarms.create('overdue_sweep', { periodInMinutes: 12 * 60 });
   } catch (e) {}
 });
+
+// ─── Global tasbih tap (works with popup closed, on any site) ───
+// Shortcut defined in manifest (Ctrl+Shift+Space, remappable at
+// chrome://extensions/shortcuts). Chrome requires Ctrl/Alt/Shift combos —
+// a bare single letter is not allowed for extension shortcuts.
+function tasbihDateKey(d) {
+  d = d || new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return p(d.getDate()) + '-' + p(d.getMonth() + 1) + '-' + d.getFullYear();
+}
+function handleTasbihTap() {
+  try {
+    chrome.storage.local.get(['settings'], (r) => {
+      try {
+        const settings = r.settings || {};
+        const tb = settings.tasbih || {};
+        if (!tb.on) return;
+        const deen = settings.deen || {};
+        const deeds = Array.isArray(deen.deeds) ? deen.deeds : [];
+        let deed = deeds.find(d => d.id === tb.deedId && d.kind === 'counter');
+        if (!deed) deed = deeds.find(d => d.kind === 'counter');
+        if (!deed) {
+          // Auto-create a default tasbih counter so the shortcut just works
+          deed = { id: 'tasbih_' + Date.now().toString(36), name: 'تسبيح', kind: 'counter', goal: 1000, unit: '', createdAt: new Date().toISOString() };
+          deeds.unshift(deed);
+        }
+        deen.deedLog = deen.deedLog || {};
+        const k = tasbihDateKey();
+        deen.deedLog[deed.id] = deen.deedLog[deed.id] || {};
+        deen.deedLog[deed.id][k] = (Number(deen.deedLog[deed.id][k]) || 0) + 1;
+        settings.deen = deen;
+        settings.tasbih = Object.assign({}, tb, { deedId: deed.id });
+        chrome.storage.local.set({ settings }, () => {
+          try {
+            const total = deen.deedLog[deed.id][k];
+            chrome.action.setBadgeBackgroundColor({ color: '#01696f' });
+            chrome.action.setBadgeText({ text: total > 9999 ? '9999+' : String(total) });
+          } catch (_) {}
+        });
+      } catch (_) {}
+    });
+  } catch (_) {}
+}
+try {
+  if (chrome.commands && chrome.commands.onCommand) {
+    chrome.commands.onCommand.addListener((cmd) => {
+      if (cmd === 'tasbih-tap') handleTasbihTap();
+    });
+  }
+} catch (_) {}

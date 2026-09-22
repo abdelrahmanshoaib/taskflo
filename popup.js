@@ -112,6 +112,7 @@ function migrate() {
   settings = Object.assign({ dark: false, work: 25, short: 5, long: 15, auto: false, sound: true, overdueNotify: true }, settings || {});
   settings.health = Object.assign({ enabled: false, every: 30 }, (settings && settings.health) || {});
   settings.ui = Object.assign({ accent: 'teal', mode: 'light', glass: 'on', density: 'comfortable', font: 'satoshi', fsize: 'md' }, settings.ui || {});
+  settings.tasbih = Object.assign({ on: false, deedId: '' }, settings.tasbih || {});
   settings.notify = Object.assign({ prayer: true, prayerMins: 5, prayerExact: true, tasks: true, overdue: true, sound: true, volume: 80 }, settings.notify || {});
   if (settings.sound === undefined) settings.sound = settings.notify.sound !== false;
   if (settings.volume === undefined) settings.volume = settings.notify.volume;
@@ -170,7 +171,7 @@ document.querySelectorAll('.tab').forEach(t => {
     if (t.dataset.tab === 'table') renderTable();
     if (t.dataset.tab === 'projects') renderProjects();
     if (t.dataset.tab === 'routines') renderRoutines();
-    if (t.dataset.tab === 'deen') { renderPrayer(); renderDeenExtras(); renderDeeds(); }
+    if (t.dataset.tab === 'deen') { renderPrayer(); renderDeenExtras(); renderDeeds(); renderTasbihCard(); }
     if (t.dataset.tab === 'calendar') renderCalendar();
     if (t.dataset.tab === 'goals') renderGoals();
     if (t.dataset.tab === 'pomodoro') renderPomoExtras();
@@ -262,6 +263,22 @@ if (deedPeriodRow) deedPeriodRow.addEventListener('click', e => {
   if (!b) return;
   settings.deen.deedPeriod = b.dataset.period;
   save(); renderDeeds();
+});
+// External tasbih mode wiring
+const tasbihOn = document.getElementById('tasbihOn');
+if (tasbihOn) tasbihOn.addEventListener('change', () => {
+  settings.tasbih = settings.tasbih || {};
+  settings.tasbih.on = tasbihOn.checked;
+  const d = tasbihDeed();
+  if (tasbihOn.checked && d) settings.tasbih.deedId = d.id;
+  save(); renderTasbihCard();
+  toast(tasbihOn.checked ? '📿 وضع التسبيح شغال — سبّح من أي مكان' : '📿 وضع التسبيح متوقف');
+});
+const tasbihDeedSel = document.getElementById('tasbihDeed');
+if (tasbihDeedSel) tasbihDeedSel.addEventListener('change', () => {
+  settings.tasbih = settings.tasbih || {};
+  settings.tasbih.deedId = tasbihDeedSel.value;
+  save(); renderTasbihCard();
 });
 
 // ─── Toast ─────────────────────────────────────────────
@@ -659,7 +676,7 @@ function snoozeReminder(id, minutes) {
   toast('😴 غفوة ' + (minutes || 10) + ' دقائق');
 }
 function renderAll() {
-  renderDashboard(); renderTasks(); renderTable(); renderProjects(); renderRoutines(); renderDeenExtras(); renderDeeds(); renderCalendar(); renderGoals(); renderPomoExtras();
+  renderDashboard(); renderTasks(); renderTable(); renderProjects(); renderRoutines(); renderDeenExtras(); renderDeeds(); renderTasbihCard(); renderCalendar(); renderGoals(); renderPomoExtras();
 }
 
 // ─── Task filter helpers (v2) ──────────────────────────
@@ -2406,6 +2423,49 @@ function renderDeeds() {
   } catch (e) {}
 }
 
+// ─── External tasbih mode (shortcut works with popup closed)
+function tasbihDeed() {
+  try {
+    const tb = (settings && settings.tasbih) || {};
+    const counters = getDeeds().filter(d => d.kind === 'counter');
+    return counters.find(d => d.id === tb.deedId) || counters[0] || null;
+  } catch (e) { return null; }
+}
+function updateTasbihBadge() {
+  try {
+    const tb = (settings && settings.tasbih) || {};
+    const setTx = (t) => { try { if (chrome.action && chrome.action.setBadgeText) chrome.action.setBadgeText({ text: t }); } catch (e) {} };
+    if (!tb.on) { setTx(''); return; }
+    try { if (chrome.action && chrome.action.setBadgeBackgroundColor) chrome.action.setBadgeBackgroundColor({ color: '#01696f' }); } catch (e) {}
+    const d = tasbihDeed();
+    const total = d ? (Number(deedDayVal(d.id, prayerDateKey())) || 0) : 0;
+    setTx(total > 0 ? (total > 9999 ? '9999+' : String(total)) : '');
+  } catch (e) {}
+}
+function renderTasbihCard() {
+  try {
+    const on = document.getElementById('tasbihOn');
+    const sel = document.getElementById('tasbihDeed');
+    const today = document.getElementById('tasbihToday');
+    if (!on || !sel) return;
+    const tb = (settings && settings.tasbih) || {};
+    if (on.checked !== !!tb.on) on.checked = !!tb.on;
+    const counters = getDeeds().filter(d => d.kind === 'counter');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">— عدّاد الذكر —</option>';
+    counters.forEach(d => {
+      const o = document.createElement('option');
+      o.value = d.id;
+      o.textContent = d.name + (d.goal > 0 ? ' (' + d.goal + ')' : '');
+      sel.appendChild(o);
+    });
+    sel.value = tb.deedId || (counters[0] && counters[0].id) || cur || '';
+    const d = tasbihDeed();
+    if (today) today.textContent = d ? String(Number(deedDayVal(d.id, prayerDateKey())) || 0) : '0';
+    updateTasbihBadge();
+  } catch (e) {}
+}
+
 // ─── Helpers ──────────────────────────────────────────
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -2617,6 +2677,7 @@ function init() {
   updateStats();
   renderDashboard();
   renderTasks();
+  try { updateTasbihBadge(); } catch (e) {}
   // v2.4: account panel + cloud auto-sync (after local data ready)
   try { if (typeof TaskfloAccountInit === 'function') TaskfloAccountInit(); else if (window.TaskfloAccountInit) window.TaskfloAccountInit(); } catch (_) {}
 }

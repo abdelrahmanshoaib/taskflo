@@ -733,7 +733,7 @@
         <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
       </svg>
     </span>
-    TaskFlow Pro <span class="ver-badge">v2.7</span>
+    TaskFlow Pro <span class="ver-badge">v2.8</span>
   </div>
   <div class="header-actions">
     <button class="icon-btn" id="btnTheme" title="تغيير المظهر">
@@ -1027,6 +1027,20 @@
       <button class="seg-btn" data-period="all">الكل</button>
     </div>
     <div id="deedsList" class="dash-list"></div>
+  </div>
+  <div>
+    <div class="section-label">📿 وضع التسبيح (عدّاد خارجي)</div>
+    <div class="dash-card" style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="grow" style="flex:1;font-size:12px">فعّل ثم سبّح من أي موقع — والبوب أب مقفول</div>
+        <label class="switch"><input type="checkbox" id="tasbihOn" /><span class="track"></span></label>
+      </div>
+      <div class="adv-row">
+        <select class="adv-select" id="tasbihDeed"><option value="">— عدّاد الذكر —</option></select>
+        <div class="deed-num" id="tasbihToday" style="text-align:center">0</div>
+      </div>
+      <div style="font-size:11px;color:var(--muted)" id="tasbihHint">الاختصار الافتراضي: <b dir="ltr">Ctrl+Shift+Space</b> — غيّره من <b>chrome://extensions/shortcuts</b></div>
+    </div>
   </div>
 </div>
 
