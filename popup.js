@@ -10,6 +10,7 @@ let currentFilter = 'all', isDark = false, editId = null, editApptId = null;
 let searchQ = '', fStatusV = '', fPriorityV = '', fProjectV = '', sortV = 'created';
 let calCursor = new Date(), calView = 'week';
 let settings = { dark: false, work: 25, short: 5, long: 15, auto: false, sound: true, overdueNotify: true };
+let prayerCache = null, prayerDone = {}, prayerData = null, prayerTimer = null, prayerScheduledKey = '';
 const MODES = { work: 25*60, short: 5*60, long: 15*60 };
 const MODE_LABELS = { work: 'وقت العمل', short: 'استراحة قصيرة', long: 'استراحة كبيرة' };
 const PRI_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
@@ -48,6 +49,7 @@ function save() {
     chrome.storage.local.set({
       dbVersion: DB_VERSION, tasks, projects, projectMeta,
       appointments, goals, focusSessions, routines, settings,
+      prayerCache, prayerDone,
       pomoStats: { today: pomoSessionsToday, total: pomoSessionsTotal, day: new Date().toISOString().slice(0, 10) },
       pomoTaskId, pomoState
     });
@@ -110,10 +112,12 @@ function migrate() {
   settings = Object.assign({ dark: false, work: 25, short: 5, long: 15, auto: false, sound: true, overdueNotify: true }, settings || {});
   settings.health = Object.assign({ enabled: false, every: 30 }, (settings && settings.health) || {});
   settings.ui = Object.assign({ accent: 'teal', mode: 'light', glass: 'on', density: 'comfortable' }, settings.ui || {});
+  settings.prayer = Object.assign({ city: 'Cairo', country: 'Egypt', method: 5 }, (settings || {}).prayer || {});
+  if (typeof prayerDone !== 'object' || !prayerDone) prayerDone = {};
 }
 function load(cb) {
   try {
-    chrome.storage.local.get(['dbVersion','tasks','projects','projectMeta','appointments','goals','routines','focusSessions','settings','pomoStats','pomoTaskId','pomoState'], r => {
+    chrome.storage.local.get(['dbVersion','tasks','projects','projectMeta','appointments','goals','routines','focusSessions','settings','prayerCache','prayerDone','pomoStats','pomoTaskId','pomoState'], r => {
       tasks = r.tasks || [];
       projects = r.projects || ['عام'];
       projectMeta = r.projectMeta || {};
@@ -121,6 +125,8 @@ function load(cb) {
       goals = r.goals || [];
       routines = r.routines || [];
       focusSessions = r.focusSessions || [];
+      prayerCache = r.prayerCache || null;
+      prayerDone = r.prayerDone || {};
       settings = r.settings || settings;
       const s = r.pomoStats || {};
       pomoSessionsToday = s.today || 0;
@@ -176,6 +182,19 @@ function switchTab(name) {
 }
 const dashAccBtn = document.getElementById('dashAccBtn');
 if (dashAccBtn) dashAccBtn.addEventListener('click', () => switchTab('account'));
+// Prayer location settings
+const prayerSaveBtn = document.getElementById('prayerSave');
+if (prayerSaveBtn) prayerSaveBtn.addEventListener('click', async () => {
+  settings.prayer = settings.prayer || {};
+  const ci = document.getElementById('prayerCity'), co = document.getElementById('prayerCountry'), me = document.getElementById('prayerMethod');
+  if (ci && ci.value.trim()) settings.prayer.city = ci.value.trim();
+  if (co && co.value.trim()) settings.prayer.country = co.value.trim();
+  if (me) settings.prayer.method = parseInt(me.value, 10) || 5;
+  save();
+  toast('🕌 حُفظت المدينة — جاري جلب المواقيت');
+  try { await fetchPrayerTimings(true); schedulePrayerAlarms(); } catch (e) { toast('⚠️ تعذر الجلب — تحقق من اسم المدينة'); }
+  renderPrayer(true);
+});
 
 // ─── Toast ─────────────────────────────────────────────
 let toastTimer = null;
@@ -1081,6 +1100,7 @@ async function renderDashAccount() {
 }
 function renderDashboard() {
   renderDashAccount();
+  renderPrayer();
   const t = todayStr();
   const open = tasks.filter(x => !x.archived);
   const todays = open.filter(isToday);
@@ -1799,6 +1819,195 @@ function applyHealthAlarm() {
   if (en) en.checked = !!(settings.health && settings.health.enabled);
   const ev = document.getElementById('healthEvery');
   if (ev && settings.health) ev.value = String(settings.health.every || 30);
+}
+
+// ─── Prayer times (Aladhan API, no key needed) ─────────
+// Reminder 5 min before adhan (via background alarms) + persistent
+// countdown that stays until the prayer is marked done.
+const PRAYER_ORDER = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+const PRAYER_AR = { Fajr: 'الفجر', Sunrise: 'الشروق', Dhuhr: 'الظهر', Asr: 'العصر', Maghrib: 'المغرب', Isha: 'العشاء' };
+function prayerToMin(hhmm) {
+  const m = String(hhmm || '').slice(0, 5).match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  return (parseInt(m[1], 10) % 24) * 60 + parseInt(m[2], 10);
+}
+function prayerPad(n) { return String(n).padStart(2, '0'); }
+function prayerFmtDur(totalSec) {
+  totalSec = Math.max(0, Math.round(totalSec));
+  const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = totalSec % 60;
+  return prayerPad(h) + ':' + prayerPad(m) + ':' + prayerPad(s);
+}
+// Pure: pick hero prayer given timings (HH:MM), done map, now minutes.
+function prayerPickHero(timings, done, nowMin) {
+  const needles = PRAYER_ORDER.map(n => ({ name: n, min: prayerToMin(timings[n]) })).filter(x => x.min !== null);
+  if (!needles.length) return null;
+  // 1) overdue & not done → stays visible until marked
+  for (const p of needles) {
+    if (nowMin >= p.min && !done[p.name]) return { name: p.name, state: 'due', atMin: p.min };
+  }
+  // 2) next upcoming
+  for (const p of needles) {
+    if (nowMin < p.min) return { name: p.name, state: 'wait', atMin: p.min, done: !!done[p.name] };
+  }
+  // 3) all passed: first not-done (missed) or all-done
+  const missed = needles.find(p => !done[p.name]);
+  if (missed) return { name: missed.name, state: 'missed', atMin: missed.min };
+  return { name: needles[needles.length - 1].name, state: 'alldone', atMin: needles[needles.length - 1].min };
+}
+function prayerDateKey(d) {
+  d = d || new Date();
+  return prayerPad(d.getDate()) + '-' + prayerPad(d.getMonth() + 1) + '-' + d.getFullYear();
+}
+async function fetchPrayerTimings(force) {
+  const cfg = (settings && settings.prayer) || {};
+  const city = (cfg.city || 'Cairo').trim(), country = (cfg.country || 'Egypt').trim(), method = cfg.method || 5;
+  const dateK = prayerDateKey();
+  if (!force && prayerCache && prayerCache.date === dateK && prayerCache.city === city && prayerCache.country === country && prayerCache.method === method && prayerCache.timings) {
+    return prayerCache;
+  }
+  const url = 'https://api.aladhan.com/v1/timingsByCity/' + dateK +
+    '?city=' + encodeURIComponent(city) + '&country=' + encodeURIComponent(country) + '&method=' + method;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const j = await res.json();
+  if (!j || j.code !== 200 || !j.data || !j.data.timings) throw new Error('bad payload');
+  prayerCache = {
+    date: dateK, city, country, method,
+    timings: j.data.timings,
+    hijri: j.data.date && j.data.date.hijri ? (j.data.date.hijri.day + ' ' + j.data.date.hijri.month.ar + ' ' + j.data.date.hijri.year) : ''
+  };
+  save();
+  return prayerCache;
+}
+function schedulePrayerAlarms() {
+  try {
+    if (!prayerCache || !prayerCache.timings) return;
+    const done = prayerDoneMap();
+    const key = prayerCache.date + '|' + PRAYER_ORDER.map(n => String(prayerCache.timings[n]).slice(0, 5)).join(',') + '|' + PRAYER_ORDER.map(n => done[n] ? '1' : '0').join('');
+    if (key === prayerScheduledKey) return; // already scheduled for this state (no dup alarms)
+    const nowMs = Date.now();
+    const now = new Date();
+    PRAYER_ORDER.forEach(name => {
+      if (done[name]) return; // no reminder for completed prayers
+      const mm = prayerToMin(prayerCache.timings[name]);
+      if (mm === null) return;
+      const at = new Date(now);
+      at.setHours(Math.floor(mm / 60), mm % 60, 0, 0);
+      const when = at.getTime() - 5 * 60000;
+      if (when > nowMs) {
+        try { chrome.runtime.sendMessage({ type: 'SET_ALARM', name: 'prayer_' + name + '_' + prayerCache.date, when }); } catch (e) {}
+      }
+    });
+    prayerScheduledKey = key;
+  } catch (e) {}
+}
+function prayerDoneMap() {
+  const k = prayerDateKey();
+  if (!prayerDone[k]) prayerDone[k] = {};
+  return prayerDone[k];
+}
+function togglePrayerDone(name) {
+  const done = prayerDoneMap();
+  done[name] = !done[name];
+  save();
+  renderPrayer(true);
+  if (done[name]) toast('🕌 تقبل الله — تمت صلاة ' + (PRAYER_AR[name] || name));
+}
+async function renderPrayer(skipFetch) {
+  const listEl = document.getElementById('prayerList');
+  if (!listEl) return;
+  // Fill location inputs once
+  try {
+    const cfg = (settings && settings.prayer) || {};
+    const ci = document.getElementById('prayerCity'), co = document.getElementById('prayerCountry'), me = document.getElementById('prayerMethod');
+    if (ci && !ci.value) ci.value = cfg.city || 'Cairo';
+    if (co && !co.value) co.value = cfg.country || 'Egypt';
+    if (me) me.value = String(cfg.method || 5);
+  } catch (e) {}
+  if (!skipFetch) {
+    try { await fetchPrayerTimings(false); }
+    catch (e) {
+      listEl.innerHTML = '<div class="empty-state"><p>تعذر جلب المواقيت — تحقق من الإنترنت والمدينة</p></div>';
+      document.getElementById('prayerNextName').textContent = '—';
+      document.getElementById('prayerCountdown').textContent = '--:--:--';
+      return;
+    }
+    schedulePrayerAlarms();
+  }
+  if (!prayerCache || !prayerCache.timings) return;
+  const T = prayerCache.timings;
+  try {
+    const hj = document.getElementById('prayerHijri');
+    if (hj && prayerCache.hijri) hj.textContent = '· ' + prayerCache.hijri;
+    if (T.Sunrise && !document.getElementById('prayerSunriseChip')) {
+      const chip = document.createElement('div');
+      chip.id = 'prayerSunriseChip';
+      chip.className = 'tag-chip';
+      chip.style.cssText = 'align-self:flex-start';
+      listEl.parentElement.insertBefore(chip, listEl);
+    }
+    const sc = document.getElementById('prayerSunriseChip');
+    if (sc) sc.textContent = '🌅 الشروق ' + String(T.Sunrise).slice(0, 5);
+  } catch (e) {}
+  const done = prayerDoneMap();
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const hero = prayerPickHero(T, done, nowMin);
+  const doneCount = PRAYER_ORDER.filter(n => done[n]).length;
+  prayerData = { hero, timings: T };
+  // Hero
+  const nameEl = document.getElementById('prayerNextName');
+  const progEl = document.getElementById('prayerProgress');
+  if (progEl) progEl.textContent = doneCount + '/5 اليوم';
+  if (hero && nameEl) {
+    if (hero.state === 'alldone') nameEl.textContent = '✅ خلصت صلوات اليوم — تقبل الله';
+    else if (hero.state === 'due') nameEl.textContent = '🕌 حان الآن: صلاة ' + PRAYER_AR[hero.name] + ' — علّم ✅';
+    else if (hero.state === 'missed') nameEl.textContent = '⚠️ فاتت صلاة ' + PRAYER_AR[hero.name] + ' — علّمها ✅';
+    else nameEl.textContent = 'صلاة ' + PRAYER_AR[hero.name] + (hero.done ? ' (تمت ✅)' : '');
+  }
+  updatePrayerCountdown();
+  if (!prayerTimer) prayerTimer = setInterval(updatePrayerCountdown, 1000);
+  // List rows (stay visible; overdue rows highlighted until marked done)
+  listEl.innerHTML = '';
+  PRAYER_ORDER.forEach(name => {
+    const mm = prayerToMin(T[name]);
+    const isDone = !!done[name];
+    const overdue = mm !== null && (nowMin >= mm) && !isDone;
+    const row = document.createElement('div');
+    row.className = 'dash-row' + (overdue ? ' plan-cat-must' : '');
+    row.innerHTML = '<div class="grow">' +
+      (isDone ? '✅ ' : overdue ? '🕌 ' : '· ') +
+      '<b>' + PRAYER_AR[name] + '</b> <span style="color:var(--muted)">· ' +
+      (mm !== null ? prayerPad(Math.floor(mm / 60)) + ':' + prayerPad(mm % 60) : '—') + '</span></div>';
+    const b = document.createElement('button');
+    b.className = 'mini-btn' + (isDone ? '' : ' go');
+    b.textContent = isDone ? 'تمت ✅' : 'علّم ✅';
+    b.addEventListener('click', () => togglePrayerDone(name));
+    row.appendChild(b);
+    listEl.appendChild(row);
+  });
+}
+function updatePrayerCountdown() {
+  try {
+    const el = document.getElementById('prayerCountdown');
+    if (!el || !prayerData || !prayerData.hero) return;
+    const hero = prayerData.hero;
+    if (hero.state === 'alldone') { el.textContent = '00:00:00'; return; }
+    const now = new Date();
+    const target = new Date(now);
+    let diffMin;
+    if (hero.state === 'wait') {
+      diffMin = hero.atMin - (now.getHours() * 60 + now.getMinutes());
+      target.setHours(Math.floor(hero.atMin / 60), hero.atMin % 60, 0, 0);
+    } else {
+      // due/missed: count UP since adhan (stays visible until marked done)
+      diffMin = -((now.getHours() * 60 + now.getMinutes()) - hero.atMin);
+      target.setHours(Math.floor(hero.atMin / 60), hero.atMin % 60, 0, 0);
+    }
+    const diffSec = Math.round((target.getTime() - now.getTime()) / 1000);
+    el.textContent = (diffSec < 0 ? '+' : '') + prayerFmtDur(Math.abs(diffSec));
+    void diffMin;
+  } catch (e) {}
 }
 
 // ─── Helpers ──────────────────────────────────────────

@@ -18,7 +18,8 @@
   "host_permissions": [
     "https://identitytoolkit.googleapis.com/*",
     "https://securetoken.googleapis.com/*",
-    "https://firestore.googleapis.com/*"
+    "https://firestore.googleapis.com/*",
+    "https://api.aladhan.com/*"
   ],
   "icons": {
     "16": "icons/icon16.png",

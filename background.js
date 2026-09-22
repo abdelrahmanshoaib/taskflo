@@ -37,7 +37,12 @@ function fireHealthBreak() {
 }
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name.startsWith('reminder_')) {
+  if (alarm.name.startsWith('prayer_')) {
+    const parts = alarm.name.split('_');
+    const en = parts[1] || '';
+    const ar = { Fajr: 'الفجر', Dhuhr: 'الظهر', Asr: 'العصر', Maghrib: 'المغرب', Isha: 'العشاء' }[en] || en;
+    notify('prayer_' + Date.now(), '🕌 بعد 5 دقائق: صلاة ' + ar, 'استعد للصلاة — تقبل الله 🕌');
+  } else if (alarm.name.startsWith('reminder_')) {
     const taskId = alarm.name.replace('reminder_', '');
     chrome.storage.local.get(['tasks'], (result) => {
       const tasks = result.tasks || [];

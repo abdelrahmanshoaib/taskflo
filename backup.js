@@ -2,7 +2,7 @@
 // Pure logic + storage access. UI wiring lives in account.js.
 (function () {
   const KEYS = ['dbVersion', 'tasks', 'projects', 'projectMeta', 'appointments',
-    'goals', 'routines', 'focusSessions', 'settings', 'pomoStats', 'pomoTaskId'];
+    'goals', 'routines', 'focusSessions', 'settings', 'pomoStats', 'pomoTaskId', 'prayerCache', 'prayerDone'];
 
   function collectBackup() {
     return {
@@ -20,7 +20,9 @@
         focusSessions: typeof focusSessions !== 'undefined' ? focusSessions : [],
         settings: typeof settings !== 'undefined' ? settings : {},
         pomoStats: { today: typeof pomoSessionsToday !== 'undefined' ? pomoSessionsToday : 0, total: typeof pomoSessionsTotal !== 'undefined' ? pomoSessionsTotal : 0, day: new Date().toISOString().slice(0, 10) },
-        pomoTaskId: typeof pomoTaskId !== 'undefined' ? pomoTaskId : ''
+        pomoTaskId: typeof pomoTaskId !== 'undefined' ? pomoTaskId : '',
+        prayerCache: typeof prayerCache !== 'undefined' ? prayerCache : null,
+        prayerDone: typeof prayerDone !== 'undefined' ? prayerDone : {}
       }
     };
   }
@@ -52,6 +54,8 @@
           pomoSessionsTotal = d.pomoStats.total || 0;
         }
         if (d.pomoTaskId !== undefined) pomoTaskId = d.pomoTaskId || '';
+        try { prayerCache = d.prayerCache || null; } catch (e) {}
+        try { prayerDone = d.prayerDone || {}; } catch (e) {}
         if (typeof migrate === 'function') migrate();
         if (typeof save === 'function') save();
         if (typeof renderAll === 'function') renderAll();

@@ -711,6 +711,30 @@
   </div>
   <div class="dash-grid" id="dashStats"></div>
   <div>
+    <div class="section-label">🕌 مواقيت الصلاة <span id="prayerHijri" style="font-weight:400"></span></div>
+    <div class="dash-card" id="prayerNext" style="background:var(--primary-grad);color:#fff;border-color:transparent;text-align:center;padding:12px">
+      <div style="font-size:11px;opacity:.9">الصلاة القادمة</div>
+      <div id="prayerNextName" style="font-size:18px;font-weight:800">...</div>
+      <div id="prayerCountdown" style="font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;direction:ltr">--:--:--</div>
+      <div id="prayerProgress" style="font-size:11px;opacity:.9">0/5</div>
+    </div>
+    <div class="dash-list" id="prayerList" style="margin-top:8px"></div>
+    <div class="adv-row" style="margin-top:8px">
+      <input class="adv-select" id="prayerCity" placeholder="المدينة (مثال: Cairo)" />
+      <input class="adv-select" id="prayerCountry" placeholder="الدولة (مثال: Egypt)" />
+    </div>
+    <div class="adv-row" style="margin-top:6px">
+      <select class="adv-select" id="prayerMethod">
+        <option value="5">مصر — الهيئة العامة للمساحة</option>
+        <option value="4">أم القرى — مكة</option>
+        <option value="8">الخليج</option>
+        <option value="3">رابطة العالم الإسلامي</option>
+        <option value="2">أمريكا الشمالية ISNA</option>
+      </select>
+      <button class="mini-btn go" id="prayerSave">حفظ الموقع</button>
+    </div>
+  </div>
+  <div>
     <div class="section-label" id="dashDateLabel">ملخص اليوم</div>
     <div class="progress-line" style="margin-bottom:8px"><div id="dashProgressFill" style="width:0%"></div></div>
     <div class="dash-list" id="dashOverdue"></div>
