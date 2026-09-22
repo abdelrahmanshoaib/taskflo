@@ -709,6 +709,18 @@
   [data-fsize="lg"] { --zoom: 1.1; }
   [data-fsize="xl"] { --zoom: 1.2; }
   body { zoom: var(--zoom, 1); }
+  .deed-tap {
+    width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0;
+    background: var(--primary-grad); color: #fff;
+    font-size: 24px; font-weight: 800; box-shadow: var(--shadow);
+    transition: transform var(--transition);
+  }
+  .deed-tap:active { transform: scale(.9); }
+  [data-dark] .deed-tap { color: #fff; }
+  .deed-num {
+    font-size: 26px; font-weight: 800; color: var(--primary);
+    font-variant-numeric: tabular-nums; line-height: 1.2;
+  }
 </style>
 </head>
 <body>
@@ -721,7 +733,7 @@
         <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
       </svg>
     </span>
-    TaskFlow Pro <span class="ver-badge">v2.6</span>
+    TaskFlow Pro <span class="ver-badge">v2.7</span>
   </div>
   <div class="header-actions">
     <button class="icon-btn" id="btnTheme" title="تغيير المظهر">
@@ -986,6 +998,35 @@
       <input class="adv-select" id="wirdGoal" placeholder="هدف الورد (مثال: جزء / 10 صفحات)" />
       <button class="mini-btn" id="wirdSave">حفظ</button>
     </div>
+  </div>
+  <div>
+    <div class="section-label">🤲 أعمال البر</div>
+    <div class="filter-row" style="margin-bottom:8px">
+      <button class="mini-btn" data-deed-tpl="fasting">🕌 صيام</button>
+      <button class="mini-btn" data-deed-tpl="charity">💰 صدقة</button>
+      <button class="mini-btn" data-deed-tpl="dhikr">📿 ذكر</button>
+    </div>
+    <div class="add-project-form" style="margin-bottom:8px">
+      <input type="text" id="newDeedName" placeholder="عمل جديد... (مثال: قيام الليل)" />
+      <button class="btn-add" id="addDeedBtn">إضافة</button>
+    </div>
+    <div class="adv-row" style="margin-bottom:8px">
+      <select class="adv-select" id="newDeedKind">
+        <option value="check">✅ إنجاز يومي (صيام/قيام)</option>
+        <option value="counter">🔢 عدّاد (ذكر/استغفار)</option>
+        <option value="amount">💰 مبلغ (صدقات)</option>
+      </select>
+      <input class="adv-select" id="newDeedGoal" type="number" min="0" placeholder="هدف يومي (للعدّاد)" />
+    </div>
+    <div class="adv-row" style="margin-bottom:8px">
+      <input class="adv-select" id="newDeedUnit" placeholder="الوحدة (مثال: جنيه) — للمبالغ" />
+    </div>
+    <div class="seg-row" id="deedPeriodRow" style="margin-bottom:8px">
+      <button class="seg-btn" data-period="7">أسبوع</button>
+      <button class="seg-btn" data-period="30">شهر</button>
+      <button class="seg-btn" data-period="all">الكل</button>
+    </div>
+    <div id="deedsList" class="dash-list"></div>
   </div>
 </div>
 

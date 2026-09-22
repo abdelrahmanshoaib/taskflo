@@ -116,7 +116,7 @@ function migrate() {
   if (settings.sound === undefined) settings.sound = settings.notify.sound !== false;
   if (settings.volume === undefined) settings.volume = settings.notify.volume;
   if (settings.overdueNotify === undefined) settings.overdueNotify = settings.notify.overdue !== false;
-  settings.deen = Object.assign({ adhkarMorning: true, morningTime: '06:30', adhkarEvening: true, eveningTime: '17:30', wird: '', adhkarDone: {}, wirdDone: {}, opens: 0 }, settings.deen || {});
+  settings.deen = Object.assign({ adhkarMorning: true, morningTime: '06:30', adhkarEvening: true, eveningTime: '17:30', wird: '', adhkarDone: {}, wirdDone: {}, opens: 0, deeds: [], deedLog: {}, deedPeriod: '30' }, settings.deen || {});
   settings.deen.adhkarDone = settings.deen.adhkarDone || {};
   settings.deen.wirdDone = settings.deen.wirdDone || {};
   settings.prayer = Object.assign({ city: 'Cairo', country: 'Egypt', method: 5 }, (settings || {}).prayer || {});
@@ -170,7 +170,7 @@ document.querySelectorAll('.tab').forEach(t => {
     if (t.dataset.tab === 'table') renderTable();
     if (t.dataset.tab === 'projects') renderProjects();
     if (t.dataset.tab === 'routines') renderRoutines();
-    if (t.dataset.tab === 'deen') { renderPrayer(); renderDeenExtras(); }
+    if (t.dataset.tab === 'deen') { renderPrayer(); renderDeenExtras(); renderDeeds(); }
     if (t.dataset.tab === 'calendar') renderCalendar();
     if (t.dataset.tab === 'goals') renderGoals();
     if (t.dataset.tab === 'pomodoro') renderPomoExtras();
@@ -232,6 +232,36 @@ if (wirdDoneBtn) wirdDoneBtn.addEventListener('click', () => {
     save(); renderDeenExtras();
     if (settings.deen.wirdDone[k]) toast('📖 تقبل الله وردك 🤍');
   } catch (e) {}
+});
+// Deeds wiring (templates + add + period)
+document.querySelectorAll('[data-deed-tpl]').forEach(b => {
+  b.addEventListener('click', () => {
+    const t = DEED_TPL[b.dataset.deedTpl];
+    if (!t) return;
+    if (getDeeds().some(d => d.name === t.name && d.kind === t.kind)) { toast('موجود بالفعل 🤲'); return; }
+    addDeed(t.name, t.kind, t.goal, t.unit);
+  });
+});
+const addDeedBtn = document.getElementById('addDeedBtn');
+if (addDeedBtn) addDeedBtn.addEventListener('click', () => {
+  const ni = document.getElementById('newDeedName');
+  const ki = document.getElementById('newDeedKind');
+  const gi = document.getElementById('newDeedGoal');
+  const un = document.getElementById('newDeedUnit');
+  if (addDeed(ni ? ni.value : '', ki ? ki.value : 'check', gi ? gi.value : 0, un ? un.value.trim() : '')) {
+    if (ni) ni.value = '';
+    if (gi) gi.value = '';
+    if (un) un.value = '';
+  }
+});
+const newDeedName = document.getElementById('newDeedName');
+if (newDeedName) newDeedName.addEventListener('keydown', e => { if (e.key === 'Enter' && addDeedBtn) addDeedBtn.click(); });
+const deedPeriodRow = document.getElementById('deedPeriodRow');
+if (deedPeriodRow) deedPeriodRow.addEventListener('click', e => {
+  const b = e.target.closest('.seg-btn');
+  if (!b) return;
+  settings.deen.deedPeriod = b.dataset.period;
+  save(); renderDeeds();
 });
 
 // ─── Toast ─────────────────────────────────────────────
@@ -629,7 +659,7 @@ function snoozeReminder(id, minutes) {
   toast('😴 غفوة ' + (minutes || 10) + ' دقائق');
 }
 function renderAll() {
-  renderDashboard(); renderTasks(); renderTable(); renderProjects(); renderRoutines(); renderDeenExtras(); renderCalendar(); renderGoals(); renderPomoExtras();
+  renderDashboard(); renderTasks(); renderTable(); renderProjects(); renderRoutines(); renderDeenExtras(); renderDeeds(); renderCalendar(); renderGoals(); renderPomoExtras();
 }
 
 // ─── Task filter helpers (v2) ──────────────────────────
@@ -2232,6 +2262,146 @@ function scheduleAdhkar() {
       try { chrome.runtime.sendMessage({ type: 'CLEAR_ALARM', name: j.name }); } catch (e) {}
       if (!j.on) return;
       try { chrome.runtime.sendMessage({ type: 'SET_ALARM', name: j.name, when: nextDailyAt(j.at) }); } catch (e) {}
+    });
+  } catch (e) {}
+}
+
+// ─── Deeds (custom Birr acts: check / counter / amount + period stats)
+const DEED_KIND_AR = { check: 'إنجاز يومي ✅', counter: 'عدّاد 🔢', amount: 'مبلغ 💰' };
+const DEED_TPL = {
+  fasting: { name: 'صيام', kind: 'check', goal: 0, unit: '' },
+  charity: { name: 'صدقة', kind: 'amount', goal: 0, unit: 'جنيه' },
+  dhikr: { name: 'استغفار', kind: 'counter', goal: 1000, unit: '' }
+};
+function getDeeds() {
+  try {
+    settings.deen = settings.deen || {};
+    if (!Array.isArray(settings.deen.deeds)) settings.deen.deeds = [];
+    if (!settings.deen.deedLog || typeof settings.deen.deedLog !== 'object') settings.deen.deedLog = {};
+    return settings.deen.deeds;
+  } catch (e) { return []; }
+}
+function deedDayVal(id, dateK) {
+  try {
+    const log = (settings.deen && settings.deen.deedLog) || {};
+    const d = log[id] || {};
+    return d[dateK || prayerDateKey()] || 0;
+  } catch (e) { return 0; }
+}
+function setDeedDayVal(id, dateK, val) {
+  settings.deen = settings.deen || {};
+  settings.deen.deedLog = settings.deen.deedLog || {};
+  settings.deen.deedLog[id] = settings.deen.deedLog[id] || {};
+  if (!val) delete settings.deen.deedLog[id][dateK];
+  else settings.deen.deedLog[id][dateK] = val;
+}
+// Pure stats: {days, total} over last N days ('all' = everything logged)
+function deedStats(logDates, period) {
+  const keys = Object.keys(logDates || {}).filter(k => /^\d{2}-\d{2}-\d{4}$/.test(k) && Number(logDates[k]) > 0);
+  let inRange = keys;
+  if (period !== 'all') {
+    const n = Number(period) || 30;
+    // keys are DD-MM-YYYY; compare via normalized YYYYMMDD
+    const norm = s => s.slice(6) + s.slice(3, 5) + s.slice(0, 2);
+    const cutN = norm(prayerDateKey(new Date(Date.now() - (n - 1) * 86400000)));
+    inRange = keys.filter(k => norm(k) >= cutN);
+  }
+  return { days: inRange.length, total: inRange.reduce((a, k) => a + Number(logDates[k] || 0), 0) };
+}
+function addDeed(name, kind, goal, unit) {
+  name = String(name || '').trim();
+  if (!name) { toast('⚠️ اسم العمل مطلوب'); return null; }
+  if (!DEED_KIND_AR[kind]) kind = 'check';
+  const d = { id: uid(), name: name.slice(0, 40), kind, goal: Math.max(0, parseInt(goal, 10) || 0), unit: String(unit || '').slice(0, 12), createdAt: new Date().toISOString() };
+  getDeeds().unshift(d);
+  save(); renderDeeds();
+  toast('🤲 تمت إضافة: ' + d.name);
+  return d;
+}
+function deleteDeed(id) {
+  const ds = getDeeds();
+  const d = ds.find(x => x.id === id);
+  if (!d) return;
+  if (!confirm('حذف "' + d.name + '" مع سجله؟')) return;
+  settings.deen.deeds = ds.filter(x => x.id !== id);
+  if (settings.deen.deedLog) delete settings.deen.deedLog[id];
+  save(); renderDeeds();
+}
+function renderDeeds() {
+  try {
+    const list = document.getElementById('deedsList');
+    if (!list) return;
+    const period = (settings.deen && settings.deen.deedPeriod) || '30';
+    document.querySelectorAll('#deedPeriodRow .seg-btn').forEach(b => b.classList.toggle('active', String(b.dataset.period) === String(period)));
+    const ds = getDeeds();
+    list.innerHTML = '';
+    if (!ds.length) {
+      list.innerHTML = '<div class="empty-state"><p>لا أعمال بعد — ضف صيام/صدقة/ذكر من الأزرار فوق 🤲</p></div>';
+      return;
+    }
+    const k = prayerDateKey();
+    ds.forEach(d => {
+      const log = ((settings.deen || {}).deedLog || {})[d.id] || {};
+      const st = deedStats(log, period);
+      const today = Number(deedDayVal(d.id, k)) || 0;
+      const card = document.createElement('div');
+      card.className = 'project-card';
+      const kindLbl = DEED_KIND_AR[d.kind] || d.kind;
+      let ctrl = '';
+      if (d.kind === 'check') {
+        ctrl = '<button class="mini-btn ' + (today ? '' : 'go') + '" data-act="toggle">' + (today ? 'تم اليوم ✅' : 'علّم اليوم ✅') + '</button>';
+      } else if (d.kind === 'counter') {
+        const pct = d.goal > 0 ? Math.min(100, Math.round(today / d.goal * 100)) : 0;
+        ctrl = '<div style="display:flex;gap:8px;align-items:center">' +
+          '<button class="deed-tap" data-act="plus1" title="+1">+1</button>' +
+          '<div style="flex:1"><div class="deed-num">' + today + (d.goal > 0 ? ' / ' + d.goal : '') + '</div>' +
+          (d.goal > 0 ? '<div class="progress-line" style="margin-top:4px"><div style="width:' + pct + '%"></div></div>' : '') +
+          '<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">' +
+          '<button class="mini-btn" data-act="plus10">+10</button>' +
+          '<button class="mini-btn" data-act="plus100">+100</button>' +
+          '<input class="mini-select" data-goal style="width:80px" type="number" min="0" value="' + (d.goal || '') + '" placeholder="هدف" title="الهدف اليومي" />' +
+          '</div></div></div>';
+      } else {
+        ctrl = '<div style="font-size:12px">اليوم: <b>' + today + '</b> ' + escHtml(d.unit || '') + '</div>' +
+          '<div style="display:flex;gap:6px;margin-top:6px">' +
+          '<input class="form-input" data-amt type="number" min="0" placeholder="المبلغ" style="flex:1" />' +
+          '<button class="mini-btn go" data-act="addAmt">+ إضافة</button></div>';
+      }
+      const statTxt = d.kind === 'check'
+        ? '📅 أيام الإنجاز: <b>' + st.days + '</b>'
+        : '📅 الأيام: <b>' + st.days + '</b> · الإجمالي: <b>' + st.total + '</b> ' + escHtml(d.unit || '');
+      card.innerHTML = '<div class="project-header"><div>' +
+        '<div class="project-name">🤲 ' + escHtml(d.name) + '</div>' +
+        '<div class="project-count">' + kindLbl + ' · ' + statTxt + '</div></div>' +
+        '<button class="task-act-btn" data-act="del" title="حذف" style="opacity:0.5">' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+        '</button></div>' +
+        '<div style="margin-top:8px">' + ctrl + '</div>';
+      card.querySelector('[data-act="del"]').addEventListener('click', () => deleteDeed(d.id));
+      const tg = card.querySelector('[data-act="toggle"]');
+      if (tg) tg.addEventListener('click', () => {
+        setDeedDayVal(d.id, k, today ? 0 : 1);
+        save(); renderDeeds();
+        if (!today) toast('🤲 تقبل الله: ' + d.name);
+      });
+      const p1 = card.querySelector('[data-act="plus1"]');
+      if (p1) p1.addEventListener('click', () => { setDeedDayVal(d.id, k, today + 1); save(); renderDeeds(); });
+      const p10 = card.querySelector('[data-act="plus10"]');
+      if (p10) p10.addEventListener('click', () => { setDeedDayVal(d.id, k, today + 10); save(); renderDeeds(); });
+      const p100 = card.querySelector('[data-act="plus100"]');
+      if (p100) p100.addEventListener('click', () => { setDeedDayVal(d.id, k, today + 100); save(); renderDeeds(); });
+      const gi = card.querySelector('[data-goal]');
+      if (gi) gi.addEventListener('change', () => { d.goal = Math.max(0, parseInt(gi.value, 10) || 0); save(); renderDeeds(); });
+      const ab = card.querySelector('[data-act="addAmt"]');
+      if (ab) ab.addEventListener('click', () => {
+        const inp = card.querySelector('[data-amt]');
+        const v = Math.max(0, parseFloat(inp ? inp.value : 0) || 0);
+        if (!v) { toast('⚠️ اكتب المبلغ'); return; }
+        setDeedDayVal(d.id, k, today + v);
+        save(); renderDeeds();
+        toast('💰 اتسجلت صدقة ' + v + ' ' + (d.unit || ''));
+      });
+      list.appendChild(card);
     });
   } catch (e) {}
 }
