@@ -28,21 +28,25 @@
   async function listUsers() {
     const c = cfg();
     const s = await adminToken();
+    // NOTE: no orderBy — collection-group ordering needs a composite index.
+    // We sort client-side instead (no index required).
     const res = await fetch('https://firestore.googleapis.com/v1/projects/' + c.projectId + '/databases/(default)/documents:runQuery', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.idToken },
       body: JSON.stringify({ structuredQuery: {
         from: [{ collectionId: 'profile', allDescendants: true }],
-        orderBy: [{ field: { fieldPath: 'updatedAt' }, direction: 'DESCENDING' }],
         limit: 100
       } })
     });
     const j = await res.json().catch(() => ([]));
-    if (!res.ok) throw new Error('فشل جلب المستخدمين: ' + res.status);
+    if (!res.ok) {
+      const em = (j && j.error && j.error.message) || res.status;
+      throw new Error('فشل جلب المستخدمين (' + res.status + '): ' + String(em).slice(0, 120));
+    }
     return (Array.isArray(j) ? j : []).filter(x => x && x.document).map(x => {
       const f = (x.document.fields) || {};
       return { uid: uidFromDocName(x.document.name), email: fval(f.email), updatedAt: fval(f.updatedAt), v: fval(f.v) };
-    }).filter(u => u.uid);
+    }).filter(u => u.uid).sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
   }
   async function getUserSub(uid, token) {
     const c = cfg();
