@@ -177,8 +177,9 @@
     if (Date.now() < quotaCooldownUntil) {
       throw new Error(friendlyGeminiError('COOLDOWN:' + Math.ceil((quotaCooldownUntil - Date.now()) / 1000)));
     }
+    // Free tier ≈ few requests/min: enforce 5s gap so normal chatting never trips it
     const gap = Date.now() - lastCallAt;
-    if (gap < 3000) await new Promise(r => setTimeout(r, 3000 - gap));
+    if (gap < 5000) await new Promise(r => setTimeout(r, 5000 - gap));
     lastCallAt = Date.now();
     let lastErr = 'unknown';
     for (let i = 0; i < tries; i++) {
@@ -188,7 +189,7 @@
         if (res.ok) return j;
         lastErr = String((j && j.error && j.error.message) || res.status);
         if (isQuotaLike(lastErr)) {
-          quotaCooldownUntil = Date.now() + 90000;
+          quotaCooldownUntil = Date.now() + 120000;
           break;
         }
         if (!isOverloadLike(lastErr)) break;
@@ -205,7 +206,7 @@
       {
         systemInstruction: { parts: [{ text: systemPrompt(messages._ctx || '', messages._persona || lastPersona) }] },
         contents: messages.list,
-        generationConfig: { temperature: 0.8, maxOutputTokens: 500 }
+        generationConfig: { temperature: 0.8, maxOutputTokens: 350 }
       }
     );
     const parts = ((((j.candidates || [])[0] || {}).content || {}).parts) || [];
@@ -282,6 +283,7 @@
       '<label>🔤 الخط</label><select data-s-font>' +
       '<option value="system">النظام</option><option value="ext">🔗 نفس خط الإكستنشن</option><option value="cairo">كايرو</option>' +
       '<option value="almarai">المراعي</option><option value="tajawal">تجوال</option><option value="plex">بلكس</option></select>' +
+      '<div style="font-size:11px;opacity:.75" data-s-fontst></div>' +
       '<label>🔠 حجم الخط: <span data-s-sizev>13</span></label>' +
       '<input type="range" min="11" max="18" step="1" data-s-size />' +
       '<label>✨ أنماط جاهزة (10)</label><div class="tf-swatches" data-s-preset>' +
@@ -637,6 +639,28 @@
       chatFontsLoaded = true;
     } catch (e) {}
   }
+  async function updateFontStatus() {
+    try {
+      const st = els.panel && els.panel.querySelector('[data-s-fontst]');
+      if (!st) return;
+      const fam = resolveChatFont();
+      const m = String(fam).match(/'([^']+)'/);
+      if (!m) { st.textContent = 'خط النظام'; return; }
+      const name = m[1];
+      let ok = false;
+      try {
+        if (document.fonts && document.fonts.check) ok = document.fonts.check('12px "' + name + '"');
+        if (!ok && document.fonts && document.fonts.load) {
+          await Promise.race([
+            document.fonts.load('12px "' + name + '"'),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000))
+          ]).catch(() => {});
+          try { ok = document.fonts.check('12px "' + name + '"'); } catch (e) {}
+        }
+      } catch (e) {}
+      st.textContent = ok ? '✅ شغال: ' + name : '⚠️ لم يتحمل هنا (محجوب في هذا الموقع؟) — جرّب موقعاً آخر';
+    } catch (e) {}
+  }
   function applyChatStyle() {
     if (!els.panel) return;
     try {
@@ -654,6 +678,7 @@
     p.setProperty('--bcol', pick(chatStyle.bcol, m.bcol));
       loadChatFont();
       syncChatStyleUI();
+      updateFontStatus();
     } catch (e) {}
   }
   function syncChatStyleUI() {

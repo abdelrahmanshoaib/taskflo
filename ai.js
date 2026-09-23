@@ -64,7 +64,7 @@
       throw new Error(friendlyGeminiError('COOLDOWN:' + Math.ceil((quotaCooldownUntil - Date.now()) / 1000)));
     }
     const gap = Date.now() - lastCallAt;
-    if (gap < 3000) await new Promise(r => setTimeout(r, 3000 - gap));
+    if (gap < 5000) await new Promise(r => setTimeout(r, 5000 - gap));
     lastCallAt = Date.now();
     let lastErr = 'unknown';
     for (let i = 0; i < tries; i++) {
@@ -74,7 +74,7 @@
         if (res.ok) return j;
         lastErr = String((j && j.error && j.error.message) || res.status);
         if (isQuotaLike(lastErr)) {
-          quotaCooldownUntil = Date.now() + 90000;
+          quotaCooldownUntil = Date.now() + 120000;
           break;
         }
         if (!isOverloadLike(lastErr)) break; // 400/401/404...: retrying is pointless
