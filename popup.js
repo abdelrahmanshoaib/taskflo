@@ -2559,7 +2559,28 @@ async function renderAds() {
     } else if (a.kind === 'code') {
       const clean = sanitizeAdHtml(a.content);
       if (!clean.trim()) return;
-      body = '<div class="ad-html">' + clean + '</div>';
+      if (a.title) {
+        const t = document.createElement('div');
+        t.className = 'ad-title';
+        t.textContent = a.title;
+        card.appendChild(t);
+      }
+      // Scoped rendering: <style> inside Shadow DOM styles ONLY the ad and can
+      // never leak into (or break) the extension UI. Scripts/event-handlers are
+      // already stripped by sanitizeAdHtml; we strip scripts again for depth.
+      const host = document.createElement('div');
+      host.className = 'ad-html';
+      try {
+        const shadow = host.attachShadow({ mode: 'open' });
+        shadow.innerHTML = clean;
+        shadow.querySelectorAll('script').forEach(n => n.remove());
+      } catch (e) {
+        host.innerHTML = clean.replace(/<style[\s\S]*?<\/style>/gi, '');
+        host.querySelectorAll('script').forEach(n => n.remove());
+      }
+      card.appendChild(host);
+      slot.appendChild(card);
+      return;
     } else {
       if (!/^\s*https:\/\//i.test(a.content)) return;
       const img = document.createElement('img');
