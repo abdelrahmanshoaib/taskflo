@@ -34,6 +34,33 @@
       catch (e) { resolve(); }
     });
   }
+  function friendlyGeminiError(em) {
+    em = String(em || '');
+    if (/API_KEY_INVALID|API key not valid/i.test(em)) return 'المفتاح غير صالح — انسخه تاني من AI Studio';
+    if (/high demand|overloaded|UNAVAILABLE/i.test(em) || /\b503\b/.test(em)) return '⏳ ضغط عالي على سيرفرات جوجل دلوقتي — استنى دقيقة وحاول تاني';
+    if (/quota|RESOURCE_EXHAUSTED/i.test(em) || /\b429\b/.test(em)) return '⚠️ خلصت حصة الاستخدام المجاني مؤقتاً — استنى شوية وحاول تاني';
+    if (/not found/i.test(em) || /\b404\b/.test(em)) return 'الموديل مش متاح — غيّره من خانة الموديل في تاب حسابي';
+    return 'Gemini رد بخطأ: ' + em.slice(0, 100);
+  }
+  // POST with auto-retry on transient errors (overload/rate/network), 3 tries.
+  async function geminiFetch(url, body, tries) {
+    tries = tries || 3;
+    let lastErr = 'unknown';
+    for (let i = 0; i < tries; i++) {
+      try {
+        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const j = await res.json().catch(() => ({}));
+        if (res.ok) return j;
+        lastErr = String((j && j.error && j.error.message) || res.status);
+        if (!/overloaded|high demand|UNAVAILABLE|503|429|RESOURCE_EXHAUSTED|rate|quota|network|fetch|failed/i.test(lastErr)) break;
+      } catch (e) {
+        // Network failure: transient → retry
+        lastErr = String((e && e.message) || e);
+      }
+      if (i < tries - 1) await new Promise(r => setTimeout(r, 1500 * (i + 1)));
+    }
+    throw new Error(friendlyGeminiError(lastErr));
+  }
   async function callGemini(key, userText, wantJson) {
     const model = await getModel();
     const body = {
@@ -42,16 +69,7 @@
       generationConfig: { temperature: 0.7, maxOutputTokens: 800 }
     };
     if (wantJson) body.generationConfig.responseMimeType = 'application/json';
-    const res = await fetch(ep(key, model), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    const j = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const em = String((j && j.error && j.error.message) || res.status);
-      if (/API_KEY_INVALID|API key not valid/i.test(em)) throw new Error('المفتاح غير صالح — انسخه تاني من AI Studio');
-      throw new Error('Gemini رد بخطأ: ' + em.slice(0, 100));
-    }
+    const j = await geminiFetch(ep(key, model), body);
     const parts = ((((j.candidates || [])[0] || {}).content || {}).parts) || [];
     const txt = parts.map(p => p.text || '').join('').trim();
     if (!wantJson) return txt;
@@ -94,7 +112,7 @@
       const sb = $('modalSubs');
       if (sb && Array.isArray(d.subtasks)) sb.value = d.subtasks.slice(0, 8).map(s => String(s).slice(0, 80)).join('\n');
       say('✨ اتحسنت — راجع واحفظ 💾');
-    } catch (e) { say('❌ ' + String((e && e.message) || e).slice(0, 120)); }
+    } catch (e) { const m = String((e && e.message) || e); say(/^[⏳⚠️✅❌]/.test(m) ? m.slice(0, 140) : '❌ ' + m.slice(0, 120)); }
   }
   async function refreshStatus() {
     try {
@@ -134,7 +152,7 @@
         await testKey(typed !== null ? typed : undefined);
         refreshStatus();
         say('✅ المفتاح شغال');
-      } catch (e) { say('❌ ' + String((e && e.message) || e).slice(0, 120)); }
+      } catch (e) { const m = String((e && e.message) || e); say(/^[⏳⚠️✅❌]/.test(m) ? m.slice(0, 140) : '❌ ' + m.slice(0, 120)); }
     });
     if (dl) dl.addEventListener('click', async () => {
       if (!confirm('مسح مفتاح Gemini من هذا الجهاز؟')) return;

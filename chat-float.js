@@ -122,17 +122,38 @@
     return true;
   }
 
+  function friendlyGeminiError(em) {
+    em = String(em || '');
+    if (/high demand|overloaded|UNAVAILABLE/i.test(em) || /\b503\b/.test(em)) return '⏳ ضغط عالي على جوجل دلوقتي — استنى دقيقة وحاول تاني ⏳';
+    if (/quota|RESOURCE_EXHAUSTED/i.test(em) || /\b429\b/.test(em)) return '⚠️ حصة الاستخدام خلصت مؤقتاً — استنى شوية وحاول تاني';
+    return '❌ ' + em.slice(0, 100);
+  }
+  async function geminiFetch(url, body, tries) {
+    tries = tries || 3;
+    let lastErr = 'unknown';
+    for (let i = 0; i < tries; i++) {
+      try {
+        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const j = await res.json().catch(() => ({}));
+        if (res.ok) return j;
+        lastErr = String((j && j.error && j.error.message) || res.status);
+        if (!/overloaded|high demand|UNAVAILABLE|503|429|RESOURCE_EXHAUSTED|rate|quota/i.test(lastErr)) break;
+      } catch (e) {
+        lastErr = String((e && e.message) || e);
+      }
+      if (i < tries - 1) await new Promise(r => setTimeout(r, 1500 * (i + 1)));
+    }
+    throw new Error(friendlyGeminiError(lastErr));
+  }
   async function callGemini(key, model, messages) {
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + (model || MODEL_FALLBACK) + ':generateContent?key=' + encodeURIComponent(key), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const j = await geminiFetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/' + (model || MODEL_FALLBACK) + ':generateContent?key=' + encodeURIComponent(key),
+      {
         systemInstruction: { parts: [{ text: systemPrompt(messages._ctx || '') }] },
         contents: messages.list,
         generationConfig: { temperature: 0.8, maxOutputTokens: 500 }
-      })
-    });
-    const j = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(String((j && j.error && j.error.message) || res.status));
+      }
+    );
     const parts = ((((j.candidates || [])[0] || {}).content || {}).parts) || [];
     return parts.map(p => p.text || '').join('').trim();
   }
@@ -371,7 +392,8 @@
         botSay('✅ اتسجلت: ' + b.title);
       }
     } catch (e) {
-      botSay('❌ ' + String((e && e.message) || e).slice(0, 120));
+      const m = String((e && e.message) || e);
+      botSay(/^[⏳⚠️✅❌]/.test(m) ? m.slice(0, 140) : '❌ ' + m.slice(0, 120));
     } finally {
       state.busy = false;
       if (els.typing) els.typing.style.display = 'none';
