@@ -34,17 +34,38 @@
       catch (e) { resolve(); }
     });
   }
+  // Smart throttling: cooldown after quota + min gap (free tier = few req/min)
+  let quotaCooldownUntil = 0;
+  let lastCallAt = 0;
+  function isQuotaLike(em) {
+    em = String(em || '');
+    return (/quota|RESOURCE_EXHAUSTED|rate.limit|too many/i.test(em) || /\b429\b/.test(em)) &&
+      !/overloaded|high demand|UNAVAILABLE/i.test(em) && !/\b503\b/.test(em);
+  }
+  function isOverloadLike(em) {
+    em = String(em || '');
+    return /overloaded|high demand|UNAVAILABLE/i.test(em) || /\b503\b/.test(em);
+  }
   function friendlyGeminiError(em) {
     em = String(em || '');
+    const cd = em.match(/^COOLDOWN:(\d+)/);
+    if (cd) return '⏳ اهدى ' + cd[1] + ' ثانية وبعدين حاول — الإرسال السريع المتكرر هو اللي بيقفل الحصة';
     if (/API_KEY_INVALID|API key not valid/i.test(em)) return 'المفتاح غير صالح — انسخه تاني من AI Studio';
     if (/high demand|overloaded|UNAVAILABLE/i.test(em) || /\b503\b/.test(em)) return '⏳ ضغط عالي على سيرفرات جوجل دلوقتي — استنى دقيقة وحاول تاني';
     if (/quota|RESOURCE_EXHAUSTED/i.test(em) || /\b429\b/.test(em)) return '⚠️ خلصت حصة الاستخدام المجاني مؤقتاً — استنى شوية وحاول تاني';
     if (/not found/i.test(em) || /\b404\b/.test(em)) return 'الموديل مش متاح — غيّره من خانة الموديل في تاب حسابي';
     return 'Gemini رد بخطأ: ' + em.slice(0, 100);
   }
-  // POST with auto-retry on transient errors (overload/rate/network), 3 tries.
+  // POST with auto-retry ONLY on transient overload/network.
+  // Quota/rate errors: NO retry + 90s cooldown (retrying worsens the block).
   async function geminiFetch(url, body, tries) {
     tries = tries || 3;
+    if (Date.now() < quotaCooldownUntil) {
+      throw new Error(friendlyGeminiError('COOLDOWN:' + Math.ceil((quotaCooldownUntil - Date.now()) / 1000)));
+    }
+    const gap = Date.now() - lastCallAt;
+    if (gap < 3000) await new Promise(r => setTimeout(r, 3000 - gap));
+    lastCallAt = Date.now();
     let lastErr = 'unknown';
     for (let i = 0; i < tries; i++) {
       try {
@@ -52,7 +73,11 @@
         const j = await res.json().catch(() => ({}));
         if (res.ok) return j;
         lastErr = String((j && j.error && j.error.message) || res.status);
-        if (!/overloaded|high demand|UNAVAILABLE|503|429|RESOURCE_EXHAUSTED|rate|quota|network|fetch|failed/i.test(lastErr)) break;
+        if (isQuotaLike(lastErr)) {
+          quotaCooldownUntil = Date.now() + 90000;
+          break;
+        }
+        if (!isOverloadLike(lastErr)) break; // 400/401/404...: retrying is pointless
       } catch (e) {
         // Network failure: transient → retry
         lastErr = String((e && e.message) || e);

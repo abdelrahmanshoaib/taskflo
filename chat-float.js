@@ -152,14 +152,34 @@
     return true;
   }
 
+  // Smart throttling (mirrors ai.js): cooldown after quota + min gap
+  let quotaCooldownUntil = 0;
+  let lastCallAt = 0;
+  function isQuotaLike(em) {
+    em = String(em || '');
+    return (/quota|RESOURCE_EXHAUSTED|rate.limit|too many/i.test(em) || /\b429\b/.test(em)) &&
+      !/overloaded|high demand|UNAVAILABLE/i.test(em) && !/\b503\b/.test(em);
+  }
+  function isOverloadLike(em) {
+    em = String(em || '');
+    return /overloaded|high demand|UNAVAILABLE/i.test(em) || /\b503\b/.test(em);
+  }
   function friendlyGeminiError(em) {
     em = String(em || '');
+    const cd = em.match(/^COOLDOWN:(\d+)/);
+    if (cd) return '⏳ اهدى ' + cd[1] + ' ثانية وبعدين ابعت — السرعة الزيادة هي اللي بتقفل الحصة ⏳';
     if (/high demand|overloaded|UNAVAILABLE/i.test(em) || /\b503\b/.test(em)) return '⏳ ضغط عالي على جوجل دلوقتي — استنى دقيقة وحاول تاني ⏳';
     if (/quota|RESOURCE_EXHAUSTED/i.test(em) || /\b429\b/.test(em)) return '⚠️ حصة الاستخدام خلصت مؤقتاً — استنى شوية وحاول تاني';
     return '❌ ' + em.slice(0, 100);
   }
   async function geminiFetch(url, body, tries) {
     tries = tries || 3;
+    if (Date.now() < quotaCooldownUntil) {
+      throw new Error(friendlyGeminiError('COOLDOWN:' + Math.ceil((quotaCooldownUntil - Date.now()) / 1000)));
+    }
+    const gap = Date.now() - lastCallAt;
+    if (gap < 3000) await new Promise(r => setTimeout(r, 3000 - gap));
+    lastCallAt = Date.now();
     let lastErr = 'unknown';
     for (let i = 0; i < tries; i++) {
       try {
@@ -167,7 +187,11 @@
         const j = await res.json().catch(() => ({}));
         if (res.ok) return j;
         lastErr = String((j && j.error && j.error.message) || res.status);
-        if (!/overloaded|high demand|UNAVAILABLE|503|429|RESOURCE_EXHAUSTED|rate|quota/i.test(lastErr)) break;
+        if (isQuotaLike(lastErr)) {
+          quotaCooldownUntil = Date.now() + 90000;
+          break;
+        }
+        if (!isOverloadLike(lastErr)) break;
       } catch (e) {
         lastErr = String((e && e.message) || e);
       }
