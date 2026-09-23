@@ -737,7 +737,7 @@
         <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
       </svg>
     </span>
-    TaskFlow Pro <span class="ver-badge">v2.10</span>
+    TaskFlow Pro <span class="ver-badge">v2.11</span>
   </div>
   <div class="header-actions">
     <button class="icon-btn" id="btnTheme" title="تغيير المظهر">
@@ -1222,6 +1222,20 @@
       <button class="mini-btn" id="btnImportPaste">✅ استيراد الملصوق</button>
     </div>
   </div>
+  <div class="acc-card">
+    <div class="section-label">✨ ذكاء اصطناعي (Gemini)</div>
+    <div class="acc-status" id="aiKeyStatus">...</div>
+    <div class="acc-hint">المفتاح محفوظ <b>على جهازك فقط</b> — لا يُرفع للسحابة ولا يدخل النسخ الاحتياطي. هاته مجاناً من <b>aistudio.google.com ← Get API key</b>.</div>
+    <div class="form-group">
+      <label class="form-label">Gemini API Key</label>
+      <input class="form-input" id="aiKeyInput" type="password" placeholder="AIza..." dir="ltr" autocomplete="off" />
+    </div>
+    <div class="acc-row">
+      <button class="mini-btn go" id="btnAiSave" style="flex:1">💾 حفظ المفتاح</button>
+      <button class="mini-btn" id="btnAiTest">🔍 تجربة</button>
+      <button class="mini-btn" id="btnAiDel">🗑️ مسح</button>
+    </div>
+  </div>
 </div>
 
 <!-- ── ADMIN PANEL (visible to admin email only) ── -->
@@ -1267,7 +1281,10 @@
     <div class="modal-title" id="taskModalTitle">➕ إضافة مهمة جديدة</div>
     <div class="form-group">
       <label class="form-label">عنوان المهمة *</label>
-      <input class="form-input" id="modalTitle" placeholder="اكتب المهمة هنا..." />
+      <div style="display:flex;gap:6px">
+        <input class="form-input" id="modalTitle" placeholder="اكتب المهمة هنا..." style="flex:1" />
+        <button class="mini-btn" id="btnAiEnhance" title="تحسين بالذكاء الاصطناعي (يراجع قبل الحفظ)">✨</button>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">الوصف التفصيلي</label>
@@ -1536,5 +1553,6 @@
 <script src="popup.js"></script>
 <script src="account.js"></script>
 <script src="admin.js"></script>
+<script src="ai.js"></script>
 </body>
 </html>

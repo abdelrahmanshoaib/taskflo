@@ -178,6 +178,7 @@ document.querySelectorAll('.tab').forEach(t => {
     if (t.dataset.tab === 'goals') renderGoals();
     if (t.dataset.tab === 'pomodoro') renderPomoExtras();
     if (t.dataset.tab === 'account' && typeof renderAccount === 'function') renderAccount();
+    if (t.dataset.tab === 'account' && window.TaskfloAI) { try { window.TaskfloAI.refreshStatus(); } catch (e) {} }
     if (t.dataset.tab === 'admin' && window.renderAdminUsers) { try { window.renderAdminUsers(); } catch (e) {} if (window.renderAdminAds) { try { window.renderAdminAds(); } catch (e) {} } }
   });
 });
@@ -194,6 +195,10 @@ function switchTab(name) {
 }
 const dashAccBtn = document.getElementById('dashAccBtn');
 if (dashAccBtn) dashAccBtn.addEventListener('click', () => switchTab('account'));
+const btnAiEnhance = document.getElementById('btnAiEnhance');
+if (btnAiEnhance) btnAiEnhance.addEventListener('click', () => {
+  try { if (window.TaskfloAI) window.TaskfloAI.enhanceModal(); } catch (e) {}
+});
 // Prayer location settings
 const prayerSaveBtn = document.getElementById('prayerSave');
 if (prayerSaveBtn) prayerSaveBtn.addEventListener('click', async () => {
