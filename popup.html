@@ -737,7 +737,7 @@
         <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
       </svg>
     </span>
-    TaskFlow Pro <span class="ver-badge">v2.16</span>
+    TaskFlow Pro <span class="ver-badge">v2.17</span>
   </div>
   <div class="header-actions">
     <button class="icon-btn" id="btnTheme" title="تغيير المظهر">
@@ -1226,6 +1226,13 @@
     </div>
   </div>
   <div class="acc-card">
+    <div class="section-label">👤 بياناتك (الشات يكلمك باسمك)</div>
+    <div class="form-group">
+      <label class="form-label">اسمك</label>
+      <input class="form-input" id="profName" placeholder="مثال: أحمد" autocomplete="off" />
+    </div>
+  </div>
+  <div class="acc-card">
     <div class="section-label">✨ ذكاء اصطناعي (Gemini)</div>
     <div class="acc-status" id="aiKeyStatus">...</div>
     <div class="acc-hint">المفتاح محفوظ <b>على جهازك فقط</b> — لا يُرفع للسحابة ولا يدخل النسخ الاحتياطي. هاته مجاناً من <b>aistudio.google.com ← Get API key</b>.</div>
@@ -1561,6 +1568,27 @@
         <button class="swatch" data-ftheme="forest" style="--sw:linear-gradient(135deg,#34d399,#1c7a3d)" title="غابة"></button>
         <button class="swatch" data-ftheme="night" style="--sw:linear-gradient(135deg,#334155,#0f172a)" title="ليلي"></button>
       </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">🗣️ شخصية الشات</label>
+      <div class="adv-row">
+        <input class="adv-select" id="pChatName" placeholder="اسم الشات (مثال: سارة)" />
+      </div>
+      <div class="seg-row" id="genderRow" style="margin-top:6px">
+        <button class="seg-btn" data-pgender="m">ذكر ♂️</button>
+        <button class="seg-btn" data-pgender="f">أنثى ♀️</button>
+      </div>
+      <label class="form-label" style="margin-top:8px">السمات (اختار أكتر من واحدة)</label>
+      <div class="filter-row" id="traitRow">
+        <button class="filter-chip" data-trait="tender">حنين 🤗</button>
+        <button class="filter-chip" data-trait="strict">صارم 💪</button>
+        <button class="filter-chip" data-trait="polite">مؤدب 🙏</button>
+        <button class="filter-chip" data-trait="playful">مرح 😄</button>
+        <button class="filter-chip" data-trait="brief">مختصر ⚡</button>
+        <button class="filter-chip" data-trait="coach">محفز 🔥</button>
+      </div>
+      <label class="form-label" style="margin-top:8px">مساحة حرة — الشات يكلمك ويتعامل معاك إزاي؟</label>
+      <textarea class="form-input" id="personaFree" rows="2" placeholder="مثال: كلمني بحماس الصبح وبهدوء بالليل، وفكرني أشرب مياه..."></textarea>
     </div>
     <div class="form-group">
       <label class="form-label">الخط | Font</label>

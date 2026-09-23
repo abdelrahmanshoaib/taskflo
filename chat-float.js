@@ -77,8 +77,36 @@
     void iso;
     return lines.join('\n');
   }
-  function systemPrompt(ctx) {
+  // ─── Persona: name, chat identity, gender, traits, free instructions
+  const TRAIT_LINES = {
+    tender: 'حنين وطيب: كلام دافئ يحتوي المستخدم ويطمنه.',
+    strict: 'صارم ومنضبط: مباشر بلا مجاملة، يركز على الالتزام ويحاسب بلطف.',
+    polite: 'مؤدب جداً: استخدم عبارات الاحترام والتقدير دائماً.',
+    playful: 'مرح: هزار خفيف ونكتة من وقت للتاني بدون إسفاف.',
+    brief: 'مختصر: أقصر رد ممكن يوفي المعنى.',
+    coach: 'محفز: طاقة عالية وتحديات صغيرة تدفع للإنجاز.'
+  };
+  let lastPersona = { userName: '', chatName: '', gender: 'm', traits: [], custom: '' };
+  function buildPersonaPrompt(p) {
+    p = p || {};
+    const lines = [];
+    const cn = String(p.chatName || '').trim().slice(0, 30);
+    if (cn) lines.push('اسمك أنت: ' + cn + '.');
+    if (p.gender === 'f') lines.push('تحدثي بصيغة المؤنث دائماً (مثال: أنا سعيدة، جاهزة، متأكدة).');
+    else lines.push('تحدث بصيغة المذكر (مثال: أنا سعيد، جاهز، متأكد).');
+    const un = String(p.userName || '').trim().slice(0, 30);
+    if (un) lines.push('المستخدم اسمه ' + un + ' — ناده باسمه من وقت للتاني بود.');
+    (Array.isArray(p.traits) ? p.traits : []).forEach(t => {
+      if (TRAIT_LINES[t]) lines.push(TRAIT_LINES[t]);
+    });
+    const cu = String(p.custom || '').trim().slice(0, 500);
+    if (cu) lines.push('تعليمات إضافية من المستخدم (التزم بها تماماً): ' + cu);
+    return lines.join('\n');
+  }
+  function systemPrompt(ctx, persona) {
+    const pp = buildPersonaPrompt(persona);
     return 'أنت «مساعد TaskFlow» — صديق مصري خفيف الظل ومشجع، تتكلم عامية مصرية مهذبة باختصار.\n' +
+      (pp ? 'هويتك وأسلوبك:\n' + pp + '\n' : '') +
       'مهامك: تذكير المستخدم بمهامه، تشجيعه بحماس، والهزار الخفيف أحياناً.\n' +
       'بيانات المستخدم الحية:\n' + ctx + '\n' +
       'قواعد صارمة:\n' +
@@ -150,7 +178,7 @@
     const j = await geminiFetch(
       'https://generativelanguage.googleapis.com/v1beta/models/' + (model || MODEL_FALLBACK) + ':generateContent?key=' + encodeURIComponent(key),
       {
-        systemInstruction: { parts: [{ text: systemPrompt(messages._ctx || '') }] },
+        systemInstruction: { parts: [{ text: systemPrompt(messages._ctx || '', messages._persona || lastPersona) }] },
         contents: messages.list,
         generationConfig: { temperature: 0.8, maxOutputTokens: 500 }
       }
@@ -351,7 +379,9 @@
     if (state.open) {
       positionPanel();
       if (!els.msgs.children.length) {
-        botSay('أهلاً بيك يا بطل! 👋 أنا معاك — عايز تفتكر مهامك، تتشجع، ولا نضيف مهمة جديدة؟');
+        const un = String((lastPersona && lastPersona.userName) || '').trim();
+        const cn = String((lastPersona && lastPersona.chatName) || '').trim();
+        botSay(un ? ('أهلاً ' + un + '! 👋 ' + (cn ? 'أنا ' + cn + '، ' : '') + 'عايز تفتكر مهامك، تتشجع، ولا نضيف مهمة جديدة؟') : ('أهلاً بيك يا بطل! 👋 ' + (cn ? 'أنا ' + cn + '، ' : 'أنا معاك — ') + 'عايز تفتكر مهامك، تتشجع، ولا نضيف مهمة جديدة؟'));
       }
       loadHistory();
     }
@@ -464,8 +494,9 @@
         return;
       }
       const ctx = buildContext(data);
+      const persona = ((data.settings || {}).persona) || {};
       const hist = state.history.slice(-8).map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] }));
-      const reply = await callGemini(data.geminiKey, data.geminiModel || MODEL_FALLBACK, { _ctx: ctx, list: hist.concat([{ role: 'user', parts: [{ text }] }]) });
+      const reply = await callGemini(data.geminiKey, data.geminiModel || MODEL_FALLBACK, { _ctx: ctx, _persona: persona, list: hist.concat([{ role: 'user', parts: [{ text }] }]) });
       const visible = String(reply || '').replace(/```task[\s\S]*?```/g, '').trim() || 'تمام 👍';
       botSay(visible);
       const blocks = parseTaskBlocks(reply || '');
@@ -632,6 +663,8 @@
       };
       const on = !!cf.on;
       const exists = !!document.getElementById('taskflo-float-root');
+      lastPersona = Object.assign({ userName: '', chatName: '', gender: 'm', traits: [], custom: '' }, (r.settings && r.settings.persona) || {});
+      if (!Array.isArray(lastPersona.traits)) lastPersona.traits = [];
       chatStyle = Object.assign({}, CHAT_DEFAULTS, (r.settings && r.settings.chatStyle) || {});
       if (on && !exists) inject();
       else if (!on && exists) removeUI();

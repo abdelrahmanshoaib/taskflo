@@ -114,6 +114,8 @@ function migrate() {
   settings.health = Object.assign({ enabled: false, every: 30 }, (settings && settings.health) || {});
   settings.ui = Object.assign({ accent: 'teal', mode: 'light', glass: 'on', density: 'comfortable', font: 'satoshi', fsize: 'md' }, settings.ui || {});
   settings.tasbih = Object.assign({ on: false, deedId: '' }, settings.tasbih || {});
+  settings.persona = Object.assign({ userName: '', chatName: '', gender: 'm', traits: [], custom: '' }, settings.persona || {});
+  if (!Array.isArray(settings.persona.traits)) settings.persona.traits = [];
   settings.chatFloat = Object.assign({ on: false, icon: '🤖', shape: 'circle', theme: 'grape', pos: null, nudge: true, nudgeMin: 30 }, settings.chatFloat || {});
   settings.notify = Object.assign({ prayer: true, prayerMins: 5, prayerExact: true, tasks: true, overdue: true, sound: true, volume: 80 }, settings.notify || {});
   if (settings.sound === undefined) settings.sound = settings.notify.sound !== false;
@@ -319,6 +321,7 @@ function applyUI() {
   document.querySelectorAll('#fontRow .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.font === (ui.font || 'satoshi')));
   document.querySelectorAll('#sizeRow .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.fsize === (ui.fsize || 'md')));
   applyFloatCustomizeUI();
+  applyPersonaUI();
   applyNotifyUI();
 }
 // ─── Notifications settings UI ─────────────────────────
@@ -363,6 +366,43 @@ function bindNotifyUI() {
     if (!b) return;
     settings.chatFloat.theme = b.dataset.ftheme;
     applyFloatCustomizeUI(); save();
+  });
+  // ─── Persona: name (account) + chat identity (customize) ───
+  const profName = document.getElementById('profName');
+  if (profName) {
+    if (settings.persona.userName) profName.value = settings.persona.userName;
+    profName.addEventListener('change', () => {
+      settings.persona.userName = profName.value.trim().slice(0, 30);
+      save();
+      toast(settings.persona.userName ? '👋 تمام يا ' + settings.persona.userName : '👤 اتمسح الاسم');
+    });
+  }
+  const pChatName = document.getElementById('pChatName');
+  if (pChatName) pChatName.addEventListener('change', () => {
+    settings.persona.chatName = pChatName.value.trim().slice(0, 30);
+    save();
+  });
+  document.getElementById('genderRow').addEventListener('click', e => {
+    const b = e.target.closest('.seg-btn');
+    if (!b) return;
+    settings.persona.gender = b.dataset.pgender === 'f' ? 'f' : 'm';
+    applyPersonaUI(); save();
+  });
+  document.getElementById('traitRow').addEventListener('click', e => {
+    const b = e.target.closest('.filter-chip');
+    if (!b) return;
+    const t = b.dataset.trait;
+    const arr = settings.persona.traits;
+    const i = arr.indexOf(t);
+    if (i >= 0) arr.splice(i, 1);
+    else arr.push(t);
+    applyPersonaUI(); save();
+  });
+  const personaFree = document.getElementById('personaFree');
+  if (personaFree) personaFree.addEventListener('change', () => {
+    settings.persona.custom = personaFree.value.trim().slice(0, 500);
+    save();
+    toast('🗣️ اتحفظت تعليماتك للشات');
   });
   on('ntVolume', el => { settings.volume = Number(el.value) || 0; settings.notify.volume = settings.volume; });
   const mins = document.getElementById('ntPrayerMins');
@@ -518,6 +558,21 @@ function applyFloatCustomizeUI() {
     document.querySelectorAll('#floatIconRow .swatch').forEach(s => s.classList.toggle('active', s.dataset.ficon === (cf.icon || '🤖')));
     document.querySelectorAll('#floatShapeRow .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.fshape === (cf.shape || 'circle')));
     document.querySelectorAll('#floatThemeRow .swatch').forEach(s => s.classList.toggle('active', s.dataset.ftheme === (cf.theme || 'grape')));
+  } catch (e) {}
+}
+
+// ─── Persona UI sync ───────────────────────────────────
+function applyPersonaUI() {
+  try {
+    const p = (settings && settings.persona) || {};
+    const cn = document.getElementById('pChatName');
+    if (cn && document.activeElement !== cn) cn.value = p.chatName || '';
+    document.querySelectorAll('#genderRow .seg-btn').forEach(b => b.classList.toggle('active', (b.dataset.pgender || 'm') === (p.gender || 'm')));
+    document.querySelectorAll('#traitRow .filter-chip').forEach(b => b.classList.toggle('active', (p.traits || []).includes(b.dataset.trait)));
+    const pf = document.getElementById('personaFree');
+    if (pf && document.activeElement !== pf) pf.value = p.custom || '';
+    const pn = document.getElementById('profName');
+    if (pn && document.activeElement !== pn && p.userName) pn.value = p.userName;
   } catch (e) {}
 }
 
