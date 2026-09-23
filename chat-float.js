@@ -7,8 +7,18 @@
   if (window.top !== window.self) return; // top frame only
   if (document.getElementById('taskflo-float-root')) return;
 
-  const MODEL = 'gemini-2.0-flash';
+  const MODEL_FALLBACK = 'gemini-3.6-flash';
+  const FLOAT_THEMES = {
+    grape: 'linear-gradient(135deg,#01939b,#6d28d9)',
+    ocean: 'linear-gradient(135deg,#3b82f6,#1565d8)',
+    sunset: 'linear-gradient(135deg,#fb923c,#c25100)',
+    candy: 'linear-gradient(135deg,#f472b6,#be185d)',
+    forest: 'linear-gradient(135deg,#34d399,#1c7a3d)',
+    night: 'linear-gradient(135deg,#334155,#0f172a)'
+  };
+  const FLOAT_ICONS = ['🤖', '✨', '📿', '🚀', '💬', '⭐', '🌙', '🕌'];
   let state = { open: false, busy: false, history: [] };
+  let lastFloatCfg = { icon: '🤖', shape: 'circle', theme: 'grape', pos: null };
   let shadow = null, els = {};
 
   function storeGet(keys) {
@@ -112,8 +122,8 @@
     return true;
   }
 
-  async function callGemini(key, messages) {
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + MODEL + ':generateContent?key=' + encodeURIComponent(key), {
+  async function callGemini(key, model, messages) {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + (model || MODEL_FALLBACK) + ':generateContent?key=' + encodeURIComponent(key), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemPrompt(messages._ctx || '') }] },
@@ -130,10 +140,11 @@
   // ─── UI (Shadow DOM — isolated from page styles) ───
   const CSS = [
     ':host{all:initial}',
-    '.tf-bubble{position:fixed;bottom:20px;left:20px;width:56px;height:56px;border-radius:50%;border:none;cursor:pointer;z-index:2147483647;',
+    '.tf-bubble{position:fixed;bottom:20px;left:20px;width:56px;height:56px;border-radius:50%;border:none;cursor:grab;touch-action:none;z-index:2147483647;',
     'background:linear-gradient(135deg,#01939b,#6d28d9);color:#fff;font-size:26px;',
     'box-shadow:0 8px 24px rgba(1,105,111,.45);display:flex;align-items:center;justify-content:center;}',
     '.tf-bubble:hover{transform:scale(1.08)}',
+    '.tf-bubble.dragging{cursor:grabbing;transform:scale(1.05);opacity:.92}',
     '.tf-panel{position:fixed;bottom:88px;left:20px;width:320px;max-height:440px;z-index:2147483647;',
     'background:#fff;color:#1d2733;border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,.3);',
     'display:none;flex-direction:column;overflow:hidden;font-family:sans-serif;}',
@@ -184,14 +195,41 @@
       typing: panel.querySelector('.tf-typing'),
       input: panel.querySelector('.tf-input input')
     };
-    bubble.addEventListener('click', () => {
-      state.open = !state.open;
-      panel.classList.toggle('open', state.open);
-      if (state.open && !els.msgs.children.length) {
-        botSay('أهلاً بيك يا بطل! 👋 أنا معاك — عايز تفتكر مهامك، تتشجع، ولا نضيف مهمة جديدة؟');
-      }
-      if (state.open) loadHistory();
+    bubble.addEventListener('click', (e) => { e.preventDefault(); });
+    // Drag-to-move (click without move toggles the panel)
+    let drag = null;
+    bubble.addEventListener('pointerdown', (e) => {
+      const r = bubble.getBoundingClientRect();
+      drag = { x0: e.clientX, y0: e.clientY, l: r.left, t: r.top, moved: false };
+      bubble.classList.add('dragging');
+      try { bubble.setPointerCapture(e.pointerId); } catch (_) {}
     });
+    bubble.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+      if (Math.abs(dx) + Math.abs(dy) > 6) drag.moved = true;
+      if (!drag.moved) return;
+      bubble.style.left = Math.max(0, Math.min(window.innerWidth - 60, drag.l + dx)) + 'px';
+      bubble.style.top = Math.max(0, Math.min(window.innerHeight - 60, drag.t + dy)) + 'px';
+      bubble.style.bottom = 'auto';
+    });
+    const endDrag = (e) => {
+      if (!drag) return;
+      const wasDrag = drag.moved;
+      // Final position from drag delta (deterministic; doesn't depend on layout reads)
+      let fx = null, fy = null;
+      if (wasDrag && e && typeof e.clientX === 'number' && typeof e.clientY === 'number') {
+        fx = Math.max(0, Math.min(window.innerWidth - 60, drag.l + (e.clientX - drag.x0)));
+        fy = Math.max(0, Math.min(window.innerHeight - 60, drag.t + (e.clientY - drag.y0)));
+      }
+      drag = null;
+      bubble.classList.remove('dragging');
+      if (!wasDrag) togglePanel();
+      else { positionPanel(); saveFloatPos(fx, fy); }
+    };
+    bubble.addEventListener('pointerup', endDrag);
+    bubble.addEventListener('pointercancel', () => { drag = null; bubble.classList.remove('dragging'); });
+    applyFloatStyle();
     panel.querySelector('[data-x]').addEventListener('click', () => {
       state.open = false;
       panel.classList.remove('open');
@@ -205,10 +243,70 @@
       else { userSay('عايز أضيف مهمة جديدة'); askAI('عايز أضيف مهمة جديدة — اسألني عن تفاصيلها سؤال واحد مختصر'); }
     }));
   }
+  // ─── Appearance + position (customizable from extension settings)
+  function applyFloatStyle() {
+    if (!els.bubble) return;
+    els.bubble.textContent = lastFloatCfg.icon;
+    els.bubble.style.background = FLOAT_THEMES[lastFloatCfg.theme] || FLOAT_THEMES.grape;
+    els.bubble.style.borderRadius = lastFloatCfg.shape === 'square' ? '18px' : '50%';
+    const p = lastFloatCfg.pos;
+    if (p && typeof p.left === 'number' && typeof p.top === 'number') {
+      els.bubble.style.left = Math.max(0, Math.min(window.innerWidth - 60, p.left)) + 'px';
+      els.bubble.style.top = Math.max(0, Math.min(window.innerHeight - 60, p.top)) + 'px';
+      els.bubble.style.bottom = 'auto';
+    } else {
+      els.bubble.style.left = '';
+      els.bubble.style.top = '';
+      els.bubble.style.bottom = '';
+    }
+  }
+  function positionPanel() {
+    if (!els.panel || !els.bubble) return;
+    try {
+      const r = els.bubble.getBoundingClientRect();
+      const pw = 320, ph = Math.min(440, window.innerHeight - 40);
+      let left = r.left + r.width / 2 - pw / 2;
+      left = Math.max(8, Math.min(window.innerWidth - pw - 8, left));
+      let top = r.top - ph - 12;
+      if (top < 8) top = r.bottom + 12;
+      els.panel.style.left = left + 'px';
+      els.panel.style.right = 'auto';
+      els.panel.style.top = top + 'px';
+      els.panel.style.bottom = 'auto';
+      els.panel.style.maxHeight = ph + 'px';
+    } catch (e) {}
+  }
+  function togglePanel() {
+    if (!els.panel) return;
+    state.open = !state.open;
+    els.panel.classList.toggle('open', state.open);
+    if (state.open) {
+      positionPanel();
+      if (!els.msgs.children.length) {
+        botSay('أهلاً بيك يا بطل! 👋 أنا معاك — عايز تفتكر مهامك، تتشجع، ولا نضيف مهمة جديدة؟');
+      }
+      loadHistory();
+    }
+  }
+  async function saveFloatPos(fx, fy) {
+    try {
+      const r = await storeGet(['settings']);
+      const s = r.settings || {};
+      s.chatFloat = s.chatFloat || {};
+      let left = fx, top = fy;
+      if (left === null || left === undefined || top === null || top === undefined) {
+        const b = els.bubble.getBoundingClientRect();
+        left = Math.round(b.left); top = Math.round(b.top);
+      }
+      s.chatFloat.pos = { left: Math.round(left), top: Math.round(top) };
+      await storeSet({ settings: s });
+    } catch (e) {}
+  }
   function removeUI() {
     const host = document.getElementById('taskflo-float-root');
     if (host) host.remove();
     shadow = null;
+    els = {};
   }
   function botSay(html) {
     if (!els.msgs) return;
@@ -257,14 +355,14 @@
     state.busy = true;
     if (els.typing) els.typing.style.display = '';
     try {
-      const data = await storeGet(['geminiKey', 'tasks', 'settings', 'prayerDone']);
+      const data = await storeGet(['geminiKey', 'geminiModel', 'tasks', 'settings', 'prayerDone']);
       if (!data.geminiKey) {
         botSay('⚠️ حط مفتاح Gemini الأول من الإكستنشن (تاب حسابي ← ذكاء اصطناعي) وأنا جاهز.');
         return;
       }
       const ctx = buildContext(data);
       const hist = state.history.slice(-8).map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] }));
-      const reply = await callGemini(data.geminiKey, { _ctx: ctx, list: hist.concat([{ role: 'user', parts: [{ text }] }]) });
+      const reply = await callGemini(data.geminiKey, data.geminiModel || MODEL_FALLBACK, { _ctx: ctx, list: hist.concat([{ role: 'user', parts: [{ text }] }]) });
       const visible = String(reply || '').replace(/```task[\s\S]*?```/g, '').trim() || 'تمام 👍';
       botSay(visible);
       const blocks = parseTaskBlocks(reply || '');
@@ -282,14 +380,22 @@
 
   // ─── Boot: respect the extension toggle (live via storage listener) ───
   // Test hook (isolated world only, invisible to pages): window.__tfFloat
-  try { window.__tfFloat = { ask: askAI, sync: syncVisibility, state }; } catch (e) {}
+  try { window.__tfFloat = { ask: askAI, sync: syncVisibility, state, ui: () => els, cfg: () => lastFloatCfg }; } catch (e) {}
   async function syncVisibility() {
     try {
       const r = await storeGet(['settings']);
-      const on = !!(r.settings && r.settings.chatFloat && r.settings.chatFloat.on);
+      const cf = (r.settings && r.settings.chatFloat) || {};
+      lastFloatCfg = {
+        icon: FLOAT_ICONS.includes(cf.icon) ? cf.icon : '🤖',
+        shape: cf.shape === 'square' ? 'square' : 'circle',
+        theme: FLOAT_THEMES[cf.theme] ? cf.theme : 'grape',
+        pos: cf.pos || null
+      };
+      const on = !!cf.on;
       const exists = !!document.getElementById('taskflo-float-root');
       if (on && !exists) inject();
       else if (!on && exists) removeUI();
+      else if (on && exists) applyFloatStyle();
     } catch (e) {}
   }
   try {

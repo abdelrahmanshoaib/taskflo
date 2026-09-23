@@ -737,7 +737,7 @@
         <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
       </svg>
     </span>
-    TaskFlow Pro <span class="ver-badge">v2.13</span>
+    TaskFlow Pro <span class="ver-badge">v2.14</span>
   </div>
   <div class="header-actions">
     <button class="icon-btn" id="btnTheme" title="تغيير المظهر">
@@ -1233,6 +1233,10 @@
       <label class="form-label">Gemini API Key</label>
       <input class="form-input" id="aiKeyInput" type="password" placeholder="AIza..." dir="ltr" autocomplete="off" />
     </div>
+    <div class="form-group">
+      <label class="form-label">الموديل (يتغير لو جوجل وقفته)</label>
+      <input class="form-input" id="aiModelInput" dir="ltr" placeholder="gemini-3.6-flash" autocomplete="off" />
+    </div>
     <div class="acc-row">
       <button class="mini-btn go" id="btnAiSave" style="flex:1">💾 حفظ المفتاح</button>
       <button class="mini-btn" id="btnAiTest">🔍 تجربة</button>
@@ -1530,7 +1534,33 @@
         <div class="grow">زر عائم + شات Gemini بمهامك</div>
         <label class="switch"><input type="checkbox" id="ntChatFloat" /><span class="track"></span></label>
       </div>
-      <div class="acc-hint" style="margin-top:6px">أول تفعيل بيطلب إذن المواقع (مرة واحدة) — وأعد تحميل صفحاتك المفتوحة. الإيقاف فوري من هنا.</div>
+      <div class="acc-hint" style="margin-top:6px">أول تفعيل بيطلب إذن المواقع (مرة واحدة) — وأعد تحميل صفحاتك المفتوحة. الإيقاف فوري من هنا. اسحب الزر في أي صفحة لتغيير مكانه.</div>
+      <label class="form-label" style="margin-top:8px">أيقونة الزر</label>
+      <div class="swatches" id="floatIconRow">
+        <button class="swatch" data-ficon="🤖" style="--sw:#0f172a;font-size:18px" title="روبوت">🤖</button>
+        <button class="swatch" data-ficon="✨" style="--sw:#6d28d9;font-size:18px" title="لمعة">✨</button>
+        <button class="swatch" data-ficon="📿" style="--sw:#01696f;font-size:18px" title="سبحة">📿</button>
+        <button class="swatch" data-ficon="🚀" style="--sw:#c25100;font-size:18px" title="صاروخ">🚀</button>
+        <button class="swatch" data-ficon="💬" style="--sw:#1565d8;font-size:18px" title="شات">💬</button>
+        <button class="swatch" data-ficon="⭐" style="--sw:#a16207;font-size:18px" title="نجمة">⭐</button>
+        <button class="swatch" data-ficon="🌙" style="--sw:#334155;font-size:18px" title="هلال">🌙</button>
+        <button class="swatch" data-ficon="🕌" style="--sw:#1c7a3d;font-size:18px" title="مسجد">🕌</button>
+      </div>
+      <div class="adv-row" style="margin-top:8px">
+        <div class="seg-row" id="floatShapeRow" style="flex:1">
+          <button class="seg-btn" data-fshape="circle">⭕ دائري</button>
+          <button class="seg-btn" data-fshape="square">▢ مربع</button>
+        </div>
+      </div>
+      <label class="form-label" style="margin-top:8px">لون الزر</label>
+      <div class="swatches" id="floatThemeRow">
+        <button class="swatch" data-ftheme="grape" style="--sw:linear-gradient(135deg,#01939b,#6d28d9)" title="عنبي"></button>
+        <button class="swatch" data-ftheme="ocean" style="--sw:linear-gradient(135deg,#3b82f6,#1565d8)" title="محيط"></button>
+        <button class="swatch" data-ftheme="sunset" style="--sw:linear-gradient(135deg,#fb923c,#c25100)" title="غروب"></button>
+        <button class="swatch" data-ftheme="candy" style="--sw:linear-gradient(135deg,#f472b6,#be185d)" title="حلاوة"></button>
+        <button class="swatch" data-ftheme="forest" style="--sw:linear-gradient(135deg,#34d399,#1c7a3d)" title="غابة"></button>
+        <button class="swatch" data-ftheme="night" style="--sw:linear-gradient(135deg,#334155,#0f172a)" title="ليلي"></button>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">الخط | Font</label>

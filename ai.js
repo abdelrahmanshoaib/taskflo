@@ -3,9 +3,9 @@
 // It is deliberately NOT inside `settings`, so it never syncs to Firestore
 // and never enters file/clipboard backups. Never logged, never toasted.
 (function () {
-  const MODEL = 'gemini-2.0-flash';
-  function ep(key) {
-    return 'https://generativelanguage.googleapis.com/v1beta/models/' + MODEL + ':generateContent?key=' + encodeURIComponent(key);
+  const DEFAULT_MODEL = 'gemini-3.6-flash';
+  function ep(key, model) {
+    return 'https://generativelanguage.googleapis.com/v1beta/models/' + (model || DEFAULT_MODEL) + ':generateContent?key=' + encodeURIComponent(key);
   }
   function $(id) { return document.getElementById(id); }
   function say(msg) { if (typeof toast === 'function') toast(msg); }
@@ -22,14 +22,27 @@
       catch (e) { resolve(); }
     });
   }
+  async function getModel() {
+    return new Promise((resolve) => {
+      try { chrome.storage.local.get(['geminiModel'], (r) => resolve((r && r.geminiModel) || DEFAULT_MODEL)); }
+      catch (e) { resolve(DEFAULT_MODEL); }
+    });
+  }
+  async function setModel(m) {
+    return new Promise((resolve) => {
+      try { chrome.storage.local.set({ geminiModel: m || DEFAULT_MODEL }, () => resolve()); }
+      catch (e) { resolve(); }
+    });
+  }
   async function callGemini(key, userText, wantJson) {
+    const model = await getModel();
     const body = {
       systemInstruction: { parts: [{ text: 'أنت مساعد إنتاجية داخل إضافة مهام. التزم بالتنسيق المطلوب حرفياً.' }] },
       contents: [{ parts: [{ text: userText }] }],
       generationConfig: { temperature: 0.7, maxOutputTokens: 800 }
     };
     if (wantJson) body.generationConfig.responseMimeType = 'application/json';
-    const res = await fetch(ep(key), {
+    const res = await fetch(ep(key, model), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
@@ -85,20 +98,28 @@
   }
   async function refreshStatus() {
     try {
-      const st = $('aiKeyStatus'), inp = $('aiKeyInput');
+      const st = $('aiKeyStatus'), inp = $('aiKeyInput'), mdl = $('aiModelInput');
       if (!st) return;
       const k = await getKey();
+      const m = await getModel();
       if (inp && document.activeElement !== inp) inp.value = k ? '••••••••' + String(k).slice(-4) : '';
       if (inp && !k) inp.value = '';
-      st.textContent = k ? '✅ المفتاح محفوظ على هذا الجهاز' : 'مفيش مفتاح — هاته من aistudio.google.com';
+      if (mdl && document.activeElement !== mdl && !mdl.value) mdl.value = m;
+      st.textContent = k ? '✅ المفتاح محفوظ على هذا الجهاز (' + m + ')' : 'مفيش مفتاح — هاته من aistudio.google.com';
     } catch (e) {}
   }
   function bindAI() {
     const sv = $('btnAiSave'), ts = $('btnAiTest'), dl = $('btnAiDel');
     if (sv) sv.addEventListener('click', async () => {
-      const inp = $('aiKeyInput');
+      const inp = $('aiKeyInput'), mdl = $('aiModelInput');
       const v = inp ? inp.value.trim() : '';
-      if (!v || v.startsWith('••••')) { say('⚠️ اكتب المفتاح كاملاً الأول'); return; }
+      const m = mdl ? mdl.value.trim() : '';
+      if (m) await setModel(m);
+      if (!v || v.startsWith('••••')) {
+        if (m) { refreshStatus(); say('💾 اتحفظ الموديل'); }
+        else say('⚠️ اكتب المفتاح كاملاً الأول');
+        return;
+      }
       await setKey(v);
       if (inp) inp.value = '';
       refreshStatus();
@@ -107,9 +128,11 @@
     if (ts) ts.addEventListener('click', async () => {
       try {
         say('🔍 جاري تجربة المفتاح...');
-        const inp = $('aiKeyInput');
+        const inp = $('aiKeyInput'), mdl = $('aiModelInput');
+        if (mdl && mdl.value.trim()) await setModel(mdl.value.trim());
         const typed = inp && inp.value.trim() && !inp.value.trim().startsWith('••••') ? inp.value.trim() : null;
         await testKey(typed !== null ? typed : undefined);
+        refreshStatus();
         say('✅ المفتاح شغال');
       } catch (e) { say('❌ ' + String((e && e.message) || e).slice(0, 120)); }
     });
@@ -122,6 +145,6 @@
     refreshStatus();
   }
 
-  window.TaskfloAI = { getKey, setKey, testKey, enhanceTask, enhanceModal, refreshStatus };
+  window.TaskfloAI = { getKey, setKey, getModel, setModel, testKey, enhanceTask, enhanceModal, refreshStatus, DEFAULT_MODEL };
   try { bindAI(); } catch (e) {}
 })();

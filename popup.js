@@ -114,7 +114,7 @@ function migrate() {
   settings.health = Object.assign({ enabled: false, every: 30 }, (settings && settings.health) || {});
   settings.ui = Object.assign({ accent: 'teal', mode: 'light', glass: 'on', density: 'comfortable', font: 'satoshi', fsize: 'md' }, settings.ui || {});
   settings.tasbih = Object.assign({ on: false, deedId: '' }, settings.tasbih || {});
-  settings.chatFloat = Object.assign({ on: false }, settings.chatFloat || {});
+  settings.chatFloat = Object.assign({ on: false, icon: '🤖', shape: 'circle', theme: 'grape', pos: null }, settings.chatFloat || {});
   settings.notify = Object.assign({ prayer: true, prayerMins: 5, prayerExact: true, tasks: true, overdue: true, sound: true, volume: 80 }, settings.notify || {});
   if (settings.sound === undefined) settings.sound = settings.notify.sound !== false;
   if (settings.volume === undefined) settings.volume = settings.notify.volume;
@@ -318,6 +318,7 @@ function applyUI() {
   document.body.setAttribute('data-fsize', ui.fsize || 'md');
   document.querySelectorAll('#fontRow .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.font === (ui.font || 'satoshi')));
   document.querySelectorAll('#sizeRow .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.fsize === (ui.fsize || 'md')));
+  applyFloatCustomizeUI();
   applyNotifyUI();
 }
 // ─── Notifications settings UI ─────────────────────────
@@ -345,6 +346,24 @@ function bindNotifyUI() {
   on('ntOverdue', el => { settings.notify.overdue = el.checked; settings.overdueNotify = el.checked; });
   on('ntSound', el => { settings.notify.sound = el.checked; settings.sound = el.checked; if (el.checked) playBeep(); });
   on('ntChatFloat', el => { toggleChatFloat(el.checked); });
+  document.getElementById('floatIconRow').addEventListener('click', e => {
+    const b = e.target.closest('.swatch');
+    if (!b) return;
+    settings.chatFloat.icon = b.dataset.ficon;
+    applyFloatCustomizeUI(); save();
+  });
+  document.getElementById('floatShapeRow').addEventListener('click', e => {
+    const b = e.target.closest('.seg-btn');
+    if (!b) return;
+    settings.chatFloat.shape = b.dataset.fshape;
+    applyFloatCustomizeUI(); save();
+  });
+  document.getElementById('floatThemeRow').addEventListener('click', e => {
+    const b = e.target.closest('.swatch');
+    if (!b) return;
+    settings.chatFloat.theme = b.dataset.ftheme;
+    applyFloatCustomizeUI(); save();
+  });
   on('ntVolume', el => { settings.volume = Number(el.value) || 0; settings.notify.volume = settings.volume; });
   const mins = document.getElementById('ntPrayerMins');
   if (mins) mins.addEventListener('change', () => { settings.notify.prayerMins = Number(mins.value) || 0; prayerScheduledKey = ''; schedulePrayerAlarms(); save(); });
@@ -476,6 +495,16 @@ function aiDraftFrom(text) {
 }
 const aiBtn = document.getElementById('aiDraftBtn');
 if (aiBtn) aiBtn.addEventListener('click', () => aiDraftFrom(searchInput ? searchInput.value : ''));
+
+// ─── Floating button appearance UI ─────────────────────
+function applyFloatCustomizeUI() {
+  try {
+    const cf = (settings && settings.chatFloat) || {};
+    document.querySelectorAll('#floatIconRow .swatch').forEach(s => s.classList.toggle('active', s.dataset.ficon === (cf.icon || '🤖')));
+    document.querySelectorAll('#floatShapeRow .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.fshape === (cf.shape || 'circle')));
+    document.querySelectorAll('#floatThemeRow .swatch').forEach(s => s.classList.toggle('active', s.dataset.ftheme === (cf.theme || 'grape')));
+  } catch (e) {}
+}
 
 // ─── Quick add ───────────────────────────────────────
 document.getElementById('quickAdd').addEventListener('keydown', e => {
