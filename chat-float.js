@@ -280,8 +280,8 @@
       '<div class="tf-msgs"></div><div class="tf-typing" style="display:none">بيكتب...</div>' +
       '<div class="tf-set">' +
       '<label>🔤 الخط</label><select data-s-font>' +
-      '<option value="system">النظام</option><option value="cairo">كايرو</option>' +
-      '<option value="almarai">المراعي</option><option value="tajawal">تجوال</option></select>' +
+      '<option value="system">النظام</option><option value="ext">🔗 نفس خط الإكستنشن</option><option value="cairo">كايرو</option>' +
+      '<option value="almarai">المراعي</option><option value="tajawal">تجوال</option><option value="plex">بلكس</option></select>' +
       '<label>🔠 حجم الخط: <span data-s-sizev>13</span></label>' +
       '<input type="range" min="11" max="18" step="1" data-s-size />' +
       '<label>✨ أنماط جاهزة (10)</label><div class="tf-swatches" data-s-preset>' +
@@ -557,9 +557,12 @@
     system: 'sans-serif',
     cairo: "'Cairo',sans-serif",
     almarai: "'Almarai',sans-serif",
-    tajawal: "'Tajawal',sans-serif"
+    tajawal: "'Tajawal',sans-serif",
+    plex: "'IBM Plex Sans Arabic',sans-serif"
   };
-  const CHAT_FONT_URL = 'https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&family=Almarai:wght@400;700&family=Tajawal:wght@400;700&display=swap';
+  // Extension popup font value → chat font key (Satoshi has no webfont here → system)
+  const EXT_FONT_MAP = { satoshi: 'system', cairo: 'cairo', almarai: 'almarai', tajawal: 'tajawal', plex: 'plex' };
+  const CHAT_FONT_URL = 'https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&family=Almarai:wght@400;700&family=Tajawal:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@400;600&display=swap';
   const CHAT_MODES = {
     light: { pbg: '#ffffff', pcol: '#1d2733', ubg: 'linear-gradient(135deg,#01939b,#01696f)', ucol: '#ffffff', bbg: '#eef2f7', bcol: '#1d2733' },
     dark: { pbg: '#1e293b', pcol: '#f1f5f9', ubg: 'linear-gradient(135deg,#0ea5e9,#6d28d9)', ucol: '#ffffff', bbg: '#334155', bcol: '#f1f5f9' }
@@ -612,8 +615,17 @@
   }
   let chatStyle = Object.assign({}, CHAT_DEFAULTS);
   let chatFontsLoaded = false;
+  let lastUiFont = 'system';
+  function resolveChatFont() {
+    if (chatStyle.font === 'ext') {
+      const k = EXT_FONT_MAP[lastUiFont] || 'system';
+      return CHAT_FONTS[k] || CHAT_FONTS.system;
+    }
+    return CHAT_FONTS[chatStyle.font] || CHAT_FONTS.system;
+  }
   function loadChatFont() {
-    if (chatFontsLoaded || chatStyle.font === 'system') return;
+    if (chatFontsLoaded) return;
+    // Preload once at inject so switching fonts is instant even on strict sites
     try {
       if (shadow && !shadow.querySelector('link[data-tf-font]')) {
         const l = document.createElement('link');
@@ -631,7 +643,7 @@
     const m = chatStyle.mode === 'dark' ? CHAT_MODES.dark : CHAT_MODES.light;
     const pick = (v, fb) => (v && String(v).trim() ? String(v).trim() : fb);
     const p = els.panel.style;
-    p.setProperty('--ffam', CHAT_FONTS[chatStyle.font] || CHAT_FONTS.system);
+    p.setProperty('--ffam', resolveChatFont());
     p.setProperty('--msize', (Math.min(18, Math.max(11, Number(chatStyle.size) || 13))) + 'px');
     // Explicit colors always win (presets); mode only supplies fallbacks + text color
     p.setProperty('--pbg', pick(chatStyle.pbg, m.pbg));
@@ -764,6 +776,7 @@
       const exists = !!document.getElementById('taskflo-float-root');
       lastPersona = Object.assign({ userName: '', chatName: '', gender: 'm', traits: [], custom: '' }, (r.settings && r.settings.persona) || {});
       if (!Array.isArray(lastPersona.traits)) lastPersona.traits = [];
+      lastUiFont = ((r.settings && r.settings.ui) || {}).font || 'system';
       chatStyle = Object.assign({}, CHAT_DEFAULTS, (r.settings && r.settings.chatStyle) || {});
       if (on && !exists) inject();
       else if (!on && exists) removeUI();
