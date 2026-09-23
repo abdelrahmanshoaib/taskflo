@@ -114,7 +114,7 @@ function migrate() {
   settings.health = Object.assign({ enabled: false, every: 30 }, (settings && settings.health) || {});
   settings.ui = Object.assign({ accent: 'teal', mode: 'light', glass: 'on', density: 'comfortable', font: 'satoshi', fsize: 'md' }, settings.ui || {});
   settings.tasbih = Object.assign({ on: false, deedId: '' }, settings.tasbih || {});
-  settings.chatFloat = Object.assign({ on: false, icon: '🤖', shape: 'circle', theme: 'grape', pos: null }, settings.chatFloat || {});
+  settings.chatFloat = Object.assign({ on: false, icon: '🤖', shape: 'circle', theme: 'grape', pos: null, nudge: true, nudgeMin: 30 }, settings.chatFloat || {});
   settings.notify = Object.assign({ prayer: true, prayerMins: 5, prayerExact: true, tasks: true, overdue: true, sound: true, volume: 80 }, settings.notify || {});
   if (settings.sound === undefined) settings.sound = settings.notify.sound !== false;
   if (settings.volume === undefined) settings.volume = settings.notify.volume;
@@ -430,6 +430,7 @@ async function toggleChatFloat(wantOn) {
     if (!wantOn) {
       settings.chatFloat.on = false;
       save(); applyNotifyUI();
+      try { chrome.runtime.sendMessage({ type: 'CLEAR_ALARM', name: 'chat_nudge' }); } catch (e) {}
       toast('🤖 المساعد العائم متوقف');
       return;
     }
@@ -446,9 +447,23 @@ async function toggleChatFloat(wantOn) {
       return;
     }
     settings.chatFloat.on = true;
+    if (settings.chatFloat.nudge === undefined) settings.chatFloat.nudge = true;
+    if (!settings.chatFloat.nudgeMin) settings.chatFloat.nudgeMin = 30;
     save(); applyNotifyUI();
+    scheduleChatNudge();
     toast('🤖 المساعد شغال — أعد تحميل صفحاتك المفتوحة');
   } catch (e) { toast('⚠️ تعذر التفعيل'); }
+}
+// (Re)schedule the periodic proactive nudge from current settings
+function scheduleChatNudge() {
+  try {
+    const cf = (settings && settings.chatFloat) || {};
+    if (!cf.on || cf.nudge === false) {
+      try { chrome.runtime.sendMessage({ type: 'CLEAR_ALARM', name: 'chat_nudge' }); } catch (e) {}
+      return;
+    }
+    try { chrome.runtime.sendMessage({ type: 'SET_PERIODIC', name: 'chat_nudge', minutes: cf.nudgeMin || 30 }); } catch (e) {}
+  } catch (e) {}
 }
 document.getElementById('filterRow').addEventListener('click', e => {
   if (!e.target.dataset.filter) return;
@@ -2868,6 +2883,7 @@ function init() {
     save();
   } catch (e) {}
   try { scheduleAdhkar(); } catch (e) {}
+  try { scheduleChatNudge(); } catch (e) {}
   // Pomodoro durations from settings + recovery after accidental close
   pomoDuration = currentModeSecs();
   pomoRemaining = pomoDuration;

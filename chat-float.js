@@ -49,14 +49,15 @@
   function buildContext(data) {
     const tasks = Array.isArray(data.tasks) ? data.tasks.filter(t => !t.archived) : [];
     const k = todayKey();
-    const iso = new Date().toISOString().slice(0, 10);
+    const iso = new Date().toISOString().slice(0, 10); // task due format is YYYY-MM-DD
     const open = tasks.filter(t => !t.done);
-    const today = open.filter(t => t.due === k || (t.scheduledAt || '').slice(0, 10) === k).slice(0, 10);
-    const overdue = open.filter(t => t.due && t.due < k).slice(0, 10);
+    const today = open.filter(t => t.due === iso || (t.scheduledAt || '').slice(0, 10) === iso).slice(0, 10);
+    const overdue = open.filter(t => t.due && t.due < iso).slice(0, 10);
     const lines = [];
     lines.push('مهام اليوم (' + today.length + '): ' + (today.map(t => t.title).join('، ') || 'لا يوجد'));
     lines.push('متأخرة (' + overdue.length + '): ' + (overdue.map(t => t.title).join('، ') || 'لا يوجد'));
     lines.push('إجمالي المفتوحة: ' + open.length);
+    lines.push('تاريخ اليوم: ' + iso);
     try {
       const dn = ((data.settings || {}).deen) || {};
       const deeds = Array.isArray(dn.deeds) ? dn.deeds : [];
@@ -166,6 +167,8 @@
     'box-shadow:0 8px 24px rgba(1,105,111,.45);display:flex;align-items:center;justify-content:center;}',
     '.tf-bubble:hover{transform:scale(1.08)}',
     '.tf-bubble.dragging{cursor:grabbing;transform:scale(1.05);opacity:.92}',
+    '.tf-dot{position:absolute;top:1px;left:1px;width:13px;height:13px;border-radius:50%;background:#ef4444;border:2px solid #fff;display:none}',
+    '.tf-dot.show{display:block}',
     '.tf-panel{position:fixed;bottom:88px;left:20px;width:320px;max-height:440px;z-index:2147483647;',
     'background:var(--pbg,#fff);color:var(--pcol,#1d2733);border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,.3);',
     'display:none;flex-direction:column;overflow:hidden;font-family:var(--ffam,sans-serif);}',
@@ -209,8 +212,14 @@
     shadow.appendChild(st);
     const bubble = document.createElement('button');
     bubble.className = 'tf-bubble';
-    bubble.textContent = '🤖';
     bubble.title = 'مساعد TaskFlow';
+    const ico = document.createElement('span');
+    ico.className = 'tf-ico';
+    ico.textContent = '🤖';
+    const dot = document.createElement('span');
+    dot.className = 'tf-dot';
+    bubble.appendChild(ico);
+    bubble.appendChild(dot);
     const panel = document.createElement('div');
     panel.className = 'tf-panel';
     panel.innerHTML =
@@ -232,6 +241,11 @@
       '<span class="tf-cpick">ردوده <input type="color" data-c-bbg /></span></div>' +
       '<div class="tf-srow"><span class="tf-cpick">لون كلامه <input type="color" data-c-bcol /></span>' +
       '<button class="tf-chip" data-s-reset>↺ افتراضي</button></div>' +
+      '<label>⏰ نبّهني تلقائياً (تذكير + تشجيع)</label>' +
+      '<select data-s-nudge>' +
+      '<option value="0">متوقف</option><option value="15">كل 15 دقيقة</option>' +
+      '<option value="30">كل 30 دقيقة</option><option value="60">كل ساعة</option>' +
+      '<option value="120">كل ساعتين</option></select>' +
       '</div>' +
       '<div class="tf-chips">' +
       '<button class="tf-chip" data-q="tasks">📋 مهامي النهاردة؟</button>' +
@@ -241,7 +255,7 @@
     shadow.appendChild(bubble);
     shadow.appendChild(panel);
     els = {
-      bubble, panel,
+      bubble, panel, ico, dot,
       msgs: panel.querySelector('.tf-msgs'),
       typing: panel.querySelector('.tf-typing'),
       input: panel.querySelector('.tf-input input')
@@ -295,11 +309,12 @@
     }));
     bindChatStyleUI();
     applyChatStyle();
+    refreshDot();
   }
   // ─── Appearance + position (customizable from extension settings)
   function applyFloatStyle() {
     if (!els.bubble) return;
-    els.bubble.textContent = lastFloatCfg.icon;
+    if (els.ico) els.ico.textContent = lastFloatCfg.icon;
     els.bubble.style.background = FLOAT_THEMES[lastFloatCfg.theme] || FLOAT_THEMES.grape;
     els.bubble.style.borderRadius = lastFloatCfg.shape === 'square' ? '18px' : '50%';
     const p = lastFloatCfg.pos;
@@ -363,40 +378,72 @@
   }
   function botSay(html) {
     if (!els.msgs) return;
+    const at = Date.now();
     const d = document.createElement('div');
     d.className = 'tf-msg tf-bot';
     d.setAttribute('dir', 'auto');
     d.textContent = html;
     els.msgs.appendChild(d);
     els.msgs.scrollTop = els.msgs.scrollHeight;
-    pushHist('bot', html);
+    pushHist('bot', html, at);
+    try { renderedKeys.add(histKey({ role: 'bot', text: html, at })); } catch (e) {}
   }
   function userSay(text) {
+    const at = Date.now();
     const d = document.createElement('div');
     d.className = 'tf-msg tf-user';
     d.setAttribute('dir', 'auto');
     d.textContent = text;
     els.msgs.appendChild(d);
     els.msgs.scrollTop = els.msgs.scrollHeight;
-    pushHist('user', text);
+    pushHist('user', text, at);
+    try { renderedKeys.add(histKey({ role: 'user', text, at })); } catch (e) {}
   }
-  function pushHist(role, text) {
-    state.history.push({ role, text: String(text).slice(0, 500), at: Date.now() });
+  function pushHist(role, text, at) {
+    state.history.push({ role, text: String(text).slice(0, 500), at: at || Date.now() });
     if (state.history.length > 30) state.history = state.history.slice(-30);
     storeSet({ chatHistory: state.history });
   }
+  let renderedKeys = new Set();
+  function histKey(m) { return (m.at || '') + '|' + (m.role || '') + '|' + String(m.text || '').slice(0, 60); }
+  function appendHistMsg(m) {
+    try {
+      const k = histKey(m);
+      if (renderedKeys.has(k)) return false;
+      renderedKeys.add(k);
+      const d = document.createElement('div');
+      d.className = 'tf-msg ' + (m.role === 'user' ? 'tf-user' : 'tf-bot');
+      d.setAttribute('dir', 'auto');
+      d.textContent = m.text;
+      els.msgs.appendChild(d);
+      return true;
+    } catch (e) { return false; }
+  }
+  // Shared conversation: every open re-renders the SAME centralized history,
+  // so moving between sites shows identical messages.
   async function loadHistory() {
     try {
       const r = await storeGet(['chatHistory']);
-      const h = Array.isArray(r.chatHistory) ? r.chatHistory.slice(-6) : [];
-      h.forEach(m => {
-        const d = document.createElement('div');
-        d.className = 'tf-msg ' + (m.role === 'user' ? 'tf-user' : 'tf-bot');
-        d.setAttribute('dir', 'auto');
-        d.textContent = m.text;
-        els.msgs.appendChild(d);
-      });
+      const h = Array.isArray(r.chatHistory) ? r.chatHistory.slice(-10) : [];
+      els.msgs.innerHTML = '';
+      renderedKeys = new Set();
+      h.forEach(m => appendHistMsg(m));
       if (h.length) els.msgs.scrollTop = els.msgs.scrollHeight;
+      markSeen();
+    } catch (e) {}
+  }
+  async function markSeen() {
+    try {
+      await storeSet({ chatSeenAt: Date.now() });
+      if (els.dot) els.dot.classList.remove('show');
+    } catch (e) {}
+  }
+  async function refreshDot() {
+    try {
+      const r = await storeGet(['chatHistory', 'chatSeenAt']);
+      const seen = Number(r.chatSeenAt) || 0;
+      const hasNew = (Array.isArray(r.chatHistory) ? r.chatHistory : []).some(m => m.role === 'bot' && (m.at || 0) > seen);
+      if (els.dot) els.dot.classList.toggle('show', !!hasNew);
     } catch (e) {}
   }
   function sendInput() {
@@ -540,6 +587,33 @@
         chatFontsLoaded = false;
         applyChatStyle(); saveChatStyle();
       });
+      const ng = q('[data-s-nudge]');
+      if (ng) {
+        refreshNudgeSelect();
+        ng.addEventListener('change', async () => {
+          const mins = Number(ng.value) || 0;
+          try {
+            const r = await storeGet(['settings']);
+            const s = r.settings || {};
+            s.chatFloat = s.chatFloat || {};
+            s.chatFloat.nudge = mins > 0;
+            s.chatFloat.nudgeMin = mins || 30;
+            await storeSet({ settings: s });
+            try {
+              if (mins > 0) chrome.runtime.sendMessage({ type: 'SET_PERIODIC', name: 'chat_nudge', minutes: mins });
+              else chrome.runtime.sendMessage({ type: 'CLEAR_ALARM', name: 'chat_nudge' });
+            } catch (e) {}
+          } catch (e) {}
+        });
+      }
+    } catch (e) {}
+  }
+  async function refreshNudgeSelect() {
+    try {
+      const r = await storeGet(['settings']);
+      const cf = (r.settings && r.settings.chatFloat) || {};
+      const ng = els.panel && els.panel.querySelector('[data-s-nudge]');
+      if (ng) ng.value = String(cf.nudge === false ? 0 : (cf.nudgeMin || 30));
     } catch (e) {}
   }
 
@@ -561,14 +635,28 @@
       chatStyle = Object.assign({}, CHAT_DEFAULTS, (r.settings && r.settings.chatStyle) || {});
       if (on && !exists) inject();
       else if (!on && exists) removeUI();
-      else if (on && exists) { applyFloatStyle(); applyChatStyle(); }
+      else if (on && exists) { applyFloatStyle(); applyChatStyle(); refreshDot(); }
     } catch (e) {}
   }
   try {
     syncVisibility();
+    refreshDot();
     if (chrome.storage && chrome.storage.onChanged) {
       chrome.storage.onChanged.addListener((chg, area) => {
-        if (area === 'local' && chg.settings) syncVisibility();
+        if (area !== 'local') return;
+        if (chg.settings) syncVisibility();
+        if (chg.chatHistory || chg.chatSeenAt) {
+          (async () => {
+            try {
+              if (!els.msgs || !state.open) { refreshDot(); return; }
+              const r = await storeGet(['chatHistory']);
+              let added = false;
+              (Array.isArray(r.chatHistory) ? r.chatHistory.slice(-10) : []).forEach(m => { if (appendHistMsg(m)) added = true; });
+              if (added) { els.msgs.scrollTop = els.msgs.scrollHeight; markSeen(); }
+              else refreshDot();
+            } catch (e) {}
+          })();
+        }
       });
     }
   } catch (e) {}

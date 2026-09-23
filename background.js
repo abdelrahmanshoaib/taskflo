@@ -122,8 +122,63 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       const n = tasks.filter(t => !t.done && !t.archived && t.due && t.due < today).length;
       if (n > 0) notify('overdue', '⚠️ مهام متأخرة (' + n + ')', 'راجع لوحة اليوم لتخطيط مهامك.');
     });
+  } else if (alarm.name === 'chat_nudge') {
+    fireChatNudge();
   }
 });
+
+// ─── Proactive chat nudges (data-driven, no AI cost) ───
+const NUDGE_CHEERS = [
+  'استمر يا بطل! الخطوة الصغيرة النهاردة هي الإنجاز الكبير بكرة 💪',
+  'فاكر هدفك؟ كل مهمة بتخلصها بتقربك منه خطوة ✨',
+  'خد نفس عميق، ركز 25 دقيقة بس، وهتشوف الفرق 🍅',
+  'الناجحين مش أذكى منك — هما بس مبيوقفوش 🚀',
+  'عملت حاجة النهاردة؟ لو لا، ابدأ بأصغر مهمة دلوقتي 🌱'
+];
+function nudgeDateKey(d) {
+  d = d || new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return p(d.getDate()) + '-' + p(d.getMonth() + 1) + '-' + d.getFullYear();
+}
+function composeNudge(tasks, prayerDone, deen, idx) {
+  try {
+    tasks = Array.isArray(tasks) ? tasks.filter(t => !t.archived) : [];
+    const k = nudgeDateKey(); // DD-MM-YYYY for prayerDone keys
+    const iso = new Date().toISOString().slice(0, 10); // YYYY-MM-DD for task due
+    const open = tasks.filter(t => !t.done);
+    const today = open.filter(t => t.due === iso || (t.scheduledAt || '').slice(0, 10) === iso);
+    const overdue = open.filter(t => t.due && t.due < iso);
+    const h = new Date().getHours();
+    const greet = h < 12 ? 'صباح الإنتاجية ☀️' : h < 18 ? 'يومك ماشي كويس 🌤️' : 'مساء الإنجاز 🌙';
+    if (overdue.length) return greet + ' — عندك ' + overdue.length + ' مهمة متأخرة، ابدأ بواحدة دلوقتي: ' + overdue[0].title;
+    if (today.length) return greet + ' — فاضل ' + today.length + ' مهام النهاردة، أقربها: ' + today[0].title + ' 💪';
+    try {
+      const pd = (prayerDone || {})[k] || {};
+      const doneN = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].filter(n => pd[n]).length;
+      if (doneN < 5 && h >= 12) return greet + ' — صلواتك ' + doneN + '/5 النهاردة، ومتنساش وردك 📖';
+    } catch (e) {}
+    return greet + ' — ' + NUDGE_CHEERS[Math.abs(idx || 0) % NUDGE_CHEERS.length];
+  } catch (e) {
+    return 'فاكر مهامك؟ بص عليهم وكمل يا بطل 💪';
+  }
+}
+function fireChatNudge() {
+  try {
+    chrome.storage.local.get(['settings', 'tasks', 'prayerDone', 'chatHistory', 'nudgeIdx'], (r) => {
+      try {
+        const cf = ((r.settings || {}).chatFloat) || {};
+        if (!cf.on || cf.nudge === false) return;
+        const idx = Number(r.nudgeIdx) || 0;
+        const msg = composeNudge(r.tasks, r.prayerDone, (r.settings || {}).deen, idx);
+        notify('chat_nudge_' + Date.now(), '🤖 مساعد TaskFlow', msg);
+        const hist = Array.isArray(r.chatHistory) ? r.chatHistory : [];
+        hist.push({ role: 'bot', auto: true, text: msg, at: Date.now() });
+        while (hist.length > 30) hist.shift();
+        chrome.storage.local.set({ chatHistory: hist, nudgeIdx: idx + 1 });
+      } catch (_) {}
+    });
+  } catch (_) {}
+}
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   try {
