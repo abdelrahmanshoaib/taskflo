@@ -105,16 +105,17 @@
   }
   function systemPrompt(ctx, persona) {
     const pp = buildPersonaPrompt(persona);
-    return 'أنت «مساعد TaskFlow» — صديق مصري خفيف الظل ومشجع، تتكلم عامية مصرية مهذبة باختصار.\n' +
+    return 'أنت «مساعد TaskFlow» — صديق مصري خفيف الظل ومشجع، تتكلم عامية مصرية مهذبة.\n' +
       (pp ? 'هويتك وأسلوبك:\n' + pp + '\n' : '') +
       'مهامك: تذكير المستخدم بمهامه، تشجيعه بحماس، والهزار الخفيف أحياناً.\n' +
       'بيانات المستخدم الحية:\n' + ctx + '\n' +
       'قواعد صارمة:\n' +
-      '1) الرد قصير (سطرين max) إلا لو طلب تفصيل.\n' +
-      '2) لو طلب إضافة مهمة/مهام: اكتب ردك عادي، ثم أضف كتلة JSON في سطر منفصل لكل مهمة بهذا الشكل بالضبط:\n' +
+      '1) أجب إجابة كاملة ووافية ومنظمة — لا تختصر المعلومات المهمة أبداً.\n' +
+      '2) لا تكتب أي تعليقات عن التعليمات نفسها — نفذها فقط.\n' +
+      '3) لو طلب إضافة مهمة/مهام: اكتب ردك عادي، ثم أضف كتلة JSON في سطر منفصل لكل مهمة بهذا الشكل بالضبط:\n' +
       '```task {"title":"العنوان","due":"YYYY-MM-DD أو فارغ","priority":"urgent|high|medium|low"}\n' +
-      '3) لا تدّعي أفعالاً خارج إضافة المهام (لا إيميلات ولا حجز).\n' +
-      '4) لو سأل عن مهامه استخدم البيانات فوق ولا تخترع مهاماً.';
+      '4) لا تدّعي أفعالاً خارج إضافة المهام (لا إيميلات ولا حجز).\n' +
+      '5) لو سأل عن مهامه استخدم البيانات فوق ولا تخترع مهاماً.';
   }
 
   // ─── Task protocol: ```task {...} blocks → saved into the system ───
@@ -259,6 +260,18 @@
       '<option value="almarai">المراعي</option><option value="tajawal">تجوال</option></select>' +
       '<label>🔠 حجم الخط: <span data-s-sizev>13</span></label>' +
       '<input type="range" min="11" max="18" step="1" data-s-size />' +
+      '<label>✨ أنماط جاهزة (10)</label><div class="tf-swatches" data-s-preset>' +
+      '<button class="tf-sw" data-preset="0" title="كلاسيك">📄</button>' +
+      '<button class="tf-sw" data-preset="1" title="ليلي">🌙</button>' +
+      '<button class="tf-sw" data-preset="2" title="وردي">💗</button>' +
+      '<button class="tf-sw" data-preset="3" title="بنفسجي">💜</button>' +
+      '<button class="tf-sw" data-preset="4" title="محيط">🌊</button>' +
+      '<button class="tf-sw" data-preset="5" title="نعناعي">🌿</button>' +
+      '<button class="tf-sw" data-preset="6" title="ذهبي">🏆</button>' +
+      '<button class="tf-sw" data-preset="7" title="فحمي">🖤</button>' +
+      '<button class="tf-sw" data-preset="8" title="مرجاني">🪸</button>' +
+      '<button class="tf-sw" data-preset="9" title="زمردي">💚</button></div>' +
+      '<label class="tf-cpick"><input type="checkbox" data-s-sound /> 🔊 صوت مع كل رسالة</label>' +
       '<label>🎨 المظهر</label><div class="tf-swatches" data-s-mode>' +
       '<button class="tf-sw" data-mode="light" title="فاتح">☀️</button>' +
       '<button class="tf-sw" data-mode="dark" title="داكن">🌙</button>' +
@@ -268,7 +281,8 @@
       '<div class="tf-srow"><span class="tf-cpick">لون كلامي <input type="color" data-c-ucol /></span>' +
       '<span class="tf-cpick">ردوده <input type="color" data-c-bbg /></span></div>' +
       '<div class="tf-srow"><span class="tf-cpick">لون كلامه <input type="color" data-c-bcol /></span>' +
-      '<button class="tf-chip" data-s-reset>↺ افتراضي</button></div>' +
+      '<button class="tf-chip" data-s-reset>↺ افتراضي</button>' +
+      '<button class="tf-chip" data-s-done style="flex:1;font-weight:700">تم ✓</button></div>' +
       '<label>⏰ نبّهني تلقائياً (تذكير + تشجيع)</label>' +
       '<select data-s-nudge>' +
       '<option value="0">متوقف</option><option value="15">كل 15 دقيقة</option>' +
@@ -499,6 +513,7 @@
       const reply = await callGemini(data.geminiKey, data.geminiModel || MODEL_FALLBACK, { _ctx: ctx, _persona: persona, list: hist.concat([{ role: 'user', parts: [{ text }] }]) });
       const visible = String(reply || '').replace(/```task[\s\S]*?```/g, '').trim() || 'تمام 👍';
       botSay(visible);
+      chatBlip();
       const blocks = parseTaskBlocks(reply || '');
       for (const b of blocks.slice(0, 3)) {
         await addTaskToSystem(b);
@@ -525,7 +540,52 @@
     light: { pbg: '#ffffff', pcol: '#1d2733', ubg: 'linear-gradient(135deg,#01939b,#01696f)', ucol: '#ffffff', bbg: '#eef2f7', bcol: '#1d2733' },
     dark: { pbg: '#1e293b', pcol: '#f1f5f9', ubg: 'linear-gradient(135deg,#0ea5e9,#6d28d9)', ucol: '#ffffff', bbg: '#334155', bcol: '#f1f5f9' }
   };
-  const CHAT_DEFAULTS = { font: 'system', size: 13, mode: 'light', pbg: '', ubg: '', ucol: '', bbg: '', bcol: '' };
+  const CHAT_DEFAULTS = { font: 'system', size: 13, mode: 'light', pbg: '', ubg: '', ucol: '', bbg: '', bcol: '', soundMsg: true, preset: -1 };
+  // 10 ready-made styles (masculine ↔ feminine range)
+  const CHAT_PRESETS = [
+    { name: 'كلاسيك', icon: '📄', font: 'system', size: 13, mode: 'light', colors: {} },
+    { name: 'ليلي', icon: '🌙', font: 'system', size: 13, mode: 'dark', colors: {} },
+    { name: 'وردي', icon: '💗', font: 'cairo', size: 14, mode: 'light', colors: { pbg: '#fff1f2', bbg: '#fce7f3', bcol: '#831843', ubg: 'linear-gradient(135deg,#f472b6,#be185d)', ucol: '#ffffff' } },
+    { name: 'بنفسجي', icon: '💜', font: 'tajawal', size: 14, mode: 'light', colors: { pbg: '#f5f3ff', bbg: '#ede9ff', bcol: '#4c1d95', ubg: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', ucol: '#ffffff' } },
+    { name: 'محيط', icon: '🌊', font: 'almarai', size: 14, mode: 'light', colors: { pbg: '#eff6ff', bbg: '#dbeafe', bcol: '#1e3a8a', ubg: 'linear-gradient(135deg,#3b82f6,#1565d8)', ucol: '#ffffff' } },
+    { name: 'نعناعي', icon: '🌿', font: 'system', size: 13, mode: 'light', colors: { pbg: '#ecfdf5', bbg: '#d1fae5', bcol: '#065f46', ubg: 'linear-gradient(135deg,#34d399,#15803d)', ucol: '#ffffff' } },
+    { name: 'ذهبي', icon: '🏆', font: 'cairo', size: 14, mode: 'light', colors: { pbg: '#fffbeb', bbg: '#fef3c7', bcol: '#92400e', ubg: 'linear-gradient(135deg,#fb923c,#c25100)', ucol: '#ffffff' } },
+    { name: 'فحمي', icon: '🖤', font: 'tajawal', size: 14, mode: 'dark', colors: {} },
+    { name: 'مرجاني', icon: '🪸', font: 'almarai', size: 14, mode: 'light', colors: { pbg: '#fff7ed', bbg: '#ffedd5', bcol: '#9a3412', ubg: 'linear-gradient(135deg,#fb923c,#c25100)', ucol: '#ffffff' } },
+    { name: 'زمردي', icon: '💚', font: 'cairo', size: 13, mode: 'light', colors: { pbg: '#f0fdf4', bbg: '#dcfce7', bcol: '#166534', ubg: 'linear-gradient(135deg,#34d399,#15803d)', ucol: '#ffffff' } }
+  ];
+  function applyChatPreset(i) {
+    const pr = CHAT_PRESETS[i];
+    if (!pr) return;
+    chatStyle.font = pr.font;
+    chatStyle.size = pr.size;
+    chatStyle.mode = pr.mode;
+    chatStyle.pbg = pr.colors.pbg || '';
+    chatStyle.ubg = pr.colors.ubg || '';
+    chatStyle.ucol = pr.colors.ucol || '';
+    chatStyle.bbg = pr.colors.bbg || '';
+    chatStyle.bcol = pr.colors.bcol || '';
+    chatStyle.preset = i;
+    chatFontsLoaded = false;
+    applyChatStyle();
+    saveChatStyle();
+  }
+  function chatBlip() {
+    try {
+      if (chatStyle.soundMsg === false) return;
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = 660; o.type = 'sine';
+      const t = ctx.currentTime;
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(0.15, t + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      o.start(t); o.stop(t + 0.2);
+    } catch (e) {}
+  }
   let chatStyle = Object.assign({}, CHAT_DEFAULTS);
   let chatFontsLoaded = false;
   function loadChatFont() {
@@ -544,18 +604,18 @@
   function applyChatStyle() {
     if (!els.panel) return;
     try {
-      const m = chatStyle.mode === 'dark' ? CHAT_MODES.dark : CHAT_MODES.light;
-      const pick = (v, fb) => (v && String(v).trim() ? String(v).trim() : fb);
-      const custom = chatStyle.mode === 'custom';
-      const p = els.panel.style;
-      p.setProperty('--ffam', CHAT_FONTS[chatStyle.font] || CHAT_FONTS.system);
-      p.setProperty('--msize', (Math.min(18, Math.max(11, Number(chatStyle.size) || 13))) + 'px');
-      p.setProperty('--pbg', custom ? pick(chatStyle.pbg, m.pbg) : m.pbg);
-      p.setProperty('--pcol', m.pcol);
-      p.setProperty('--ubg', custom ? pick(chatStyle.ubg, m.ubg) : m.ubg);
-      p.setProperty('--ucol', custom ? pick(chatStyle.ucol, m.ucol) : m.ucol);
-      p.setProperty('--bbg', custom ? pick(chatStyle.bbg, m.bbg) : m.bbg);
-      p.setProperty('--bcol', custom ? pick(chatStyle.bcol, m.bcol) : m.bcol);
+    const m = chatStyle.mode === 'dark' ? CHAT_MODES.dark : CHAT_MODES.light;
+    const pick = (v, fb) => (v && String(v).trim() ? String(v).trim() : fb);
+    const p = els.panel.style;
+    p.setProperty('--ffam', CHAT_FONTS[chatStyle.font] || CHAT_FONTS.system);
+    p.setProperty('--msize', (Math.min(18, Math.max(11, Number(chatStyle.size) || 13))) + 'px');
+    // Explicit colors always win (presets); mode only supplies fallbacks + text color
+    p.setProperty('--pbg', pick(chatStyle.pbg, m.pbg));
+    p.setProperty('--pcol', m.pcol);
+    p.setProperty('--ubg', pick(chatStyle.ubg, m.ubg));
+    p.setProperty('--ucol', pick(chatStyle.ucol, m.ucol));
+    p.setProperty('--bbg', pick(chatStyle.bbg, m.bbg));
+    p.setProperty('--bcol', pick(chatStyle.bcol, m.bcol));
       loadChatFont();
       syncChatStyleUI();
     } catch (e) {}
@@ -569,6 +629,9 @@
       if (sz) sz.value = chatStyle.size || 13;
       if (sv) sv.textContent = chatStyle.size || 13;
       els.panel.querySelectorAll('[data-s-mode] .tf-sw').forEach(b => b.classList.toggle('on', b.dataset.mode === (chatStyle.mode || 'light')));
+      els.panel.querySelectorAll('[data-s-preset] .tf-sw').forEach(b => b.classList.toggle('on', Number(b.dataset.preset) === Number(chatStyle.preset)));
+      const snd = q('[data-s-sound]');
+      if (snd) snd.checked = chatStyle.soundMsg !== false;
       const setC = (sel, v, fb) => { const el = q(sel); if (el) el.value = /^#[0-9a-f]{6}$/i.test(v || '') ? v : fb; };
       const m = chatStyle.mode === 'dark' ? CHAT_MODES.dark : CHAT_MODES.light;
       setC('[data-c-pbg]', chatStyle.pbg, m.pbg);
@@ -597,27 +660,39 @@
         if (setBox.classList.contains('open')) { applyChatStyle(); }
       });
       const fs = q('[data-s-font]');
-      if (fs) fs.addEventListener('change', () => { chatStyle.font = fs.value; chatFontsLoaded = false; applyChatStyle(); saveChatStyle(); });
+      if (fs) fs.addEventListener('change', () => { chatStyle.font = fs.value; chatStyle.preset = -1; chatFontsLoaded = false; applyChatStyle(); saveChatStyle(); });
       const sz = q('[data-s-size]');
-      if (sz) sz.addEventListener('input', () => { chatStyle.size = Number(sz.value) || 13; applyChatStyle(); });
+      if (sz) sz.addEventListener('input', () => { chatStyle.size = Number(sz.value) || 13; chatStyle.preset = -1; applyChatStyle(); });
       if (sz) sz.addEventListener('change', () => { saveChatStyle(); });
       els.panel.querySelectorAll('[data-s-mode] .tf-sw').forEach(b => b.addEventListener('click', () => {
         chatStyle.mode = b.dataset.mode;
+        chatStyle.preset = -1;
         applyChatStyle(); saveChatStyle();
       }));
+      els.panel.querySelectorAll('[data-s-preset] .tf-sw').forEach(b => b.addEventListener('click', () => {
+        applyChatPreset(Number(b.dataset.preset));
+      }));
+      const snd = q('[data-s-sound]');
+      if (snd) snd.addEventListener('change', () => {
+        chatStyle.soundMsg = snd.checked;
+        chatStyle.preset = -1;
+        saveChatStyle();
+        if (snd.checked) chatBlip();
+      });
+      const dn = q('[data-s-done]');
+      if (dn) dn.addEventListener('click', () => {
+        saveChatStyle();
+        if (setBox) setBox.classList.remove('open');
+      });
       [['[data-c-pbg]', 'pbg'], ['[data-c-ubg]', 'ubg'], ['[data-c-ucol]', 'ucol'], ['[data-c-bbg]', 'bbg'], ['[data-c-bcol]', 'bcol']].forEach(([sel, key]) => {
         const el = q(sel);
         if (el) {
-          el.addEventListener('input', () => { chatStyle.mode = 'custom'; chatStyle[key] = el.value; applyChatStyle(); });
+          el.addEventListener('input', () => { chatStyle.mode = 'custom'; chatStyle.preset = -1; chatStyle[key] = el.value; applyChatStyle(); });
           el.addEventListener('change', () => { saveChatStyle(); });
         }
       });
       const rs = q('[data-s-reset]');
-      if (rs) rs.addEventListener('click', () => {
-        chatStyle = Object.assign({}, CHAT_DEFAULTS);
-        chatFontsLoaded = false;
-        applyChatStyle(); saveChatStyle();
-      });
+      if (rs) rs.addEventListener('click', () => { applyChatPreset(0); });
       const ng = q('[data-s-nudge]');
       if (ng) {
         refreshNudgeSelect();
