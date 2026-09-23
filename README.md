@@ -69,6 +69,10 @@ taskflo/
 ## لوحة الإدارة | Admin (لإيميلك فقط)
 
 > تبويب **👑 الإدارة** يظهر فقط لحساب `abdelrahmanshoaib@gmail.com`. إخفاؤه بالإيميل للراحة فقط — **الحماية الحقيقية برقم الـ UID في `firestore.rules`** (لا يمكن تزويره).
+>
+> 🌐 **لوحة الإدارة الكاملة (ويب): https://abdelrahmanshoaib.github.io/taskflo-admin/** — ريبو مستقل `taskflo-admin` بنفس Firebase: إحصائيات + بحث + تعديل اشتراكات + إعلانات. الدخول بإيميل/كلمة سر الأدمن فقط. من تبويب الإدارة في الإكستنشن: زرار **🌐 اللوحة الكاملة** يفتحها.
+>
+> ⚠️ مع كل تحديث يمس `firestore.rules`: أعد النشر في **Firestore → Rules → Publish**.
 
 1. هات الـ UID بتاعك: Firebase Console → **Authentication → Users** → انسخ **UID** (عمود User UID)
 2. ✅ تم: الـ UID متثبت في `firebase-config.js` و `firestore.rules` — فاضل تنشر القواعد بس (الخطوة 3)
