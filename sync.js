@@ -162,6 +162,19 @@
   async function signOut() {
     await setSession(null);
   }
+  async function sendReset(email) {
+    const c = cfg();
+    const res = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=' + c.apiKey, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestType: 'PASSWORD_RESET', email })
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const em = String((j && j.error && j.error.message) || res.status);
+      if (/EMAIL_NOT_FOUND/i.test(em)) throw new Error('مفيش حساب بالإيميل ده — اعمل حساب جديد الأول');
+      throw new Error(em);
+    }
+  }
   async function refreshIdToken(sess) {
     const c = cfg();
     const res = await fetch('https://securetoken.googleapis.com/v1/token?key=' + c.apiKey, {
@@ -398,7 +411,7 @@
 
   window.TaskfloSync = {
     isConfigured, getSession, getPrefs, setPrefs, isAdmin,
-    signUp, signIn, signInWithGoogle, signOut, pushNow, pullNow, schedulePush, syncOnStart, diagnoseCloud,
+    signUp, signIn, signInWithGoogle, signOut, sendReset, pushNow, pullNow, schedulePush, syncOnStart, diagnoseCloud,
     getSubStatus, writeHeartbeat
   };
 })();

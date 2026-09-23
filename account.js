@@ -95,6 +95,14 @@
       say('👋 خرجت — الداتا المحلية محفوظة على الجهاز');
       renderAccount();
     });
+    if ($('btnForgot')) $('btnForgot').addEventListener('click', async () => {
+      try {
+        if (!email()) { say('⚠️ اكتب الإيميل الأول'); return; }
+        say('⏳ جاري إرسال رابط الاسترجاع...');
+        await S.sendReset(email());
+        say('📧 اتبعتت رسالة الاسترجاع — افتح إيميلك ودوس اللينك');
+      } catch (e) { say('❌ ' + e.message); }
+    });
     if ($('btnGoogle')) $('btnGoogle').addEventListener('click', async () => {
       try {
         hideGoogleErr();
