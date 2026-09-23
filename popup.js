@@ -114,6 +114,7 @@ function migrate() {
   settings.health = Object.assign({ enabled: false, every: 30 }, (settings && settings.health) || {});
   settings.ui = Object.assign({ accent: 'teal', mode: 'light', glass: 'on', density: 'comfortable', font: 'satoshi', fsize: 'md' }, settings.ui || {});
   settings.tasbih = Object.assign({ on: false, deedId: '' }, settings.tasbih || {});
+  settings.chatFloat = Object.assign({ on: false }, settings.chatFloat || {});
   settings.notify = Object.assign({ prayer: true, prayerMins: 5, prayerExact: true, tasks: true, overdue: true, sound: true, volume: 80 }, settings.notify || {});
   if (settings.sound === undefined) settings.sound = settings.notify.sound !== false;
   if (settings.volume === undefined) settings.volume = settings.notify.volume;
@@ -329,6 +330,7 @@ function applyNotifyUI() {
     set('ntTasks', n.tasks !== false);
     set('ntOverdue', settings.overdueNotify !== false && n.overdue !== false);
     set('ntSound', settings.sound !== false && n.sound !== false);
+    set('ntChatFloat', settings.chatFloat && settings.chatFloat.on === true);
     const mins = document.getElementById('ntPrayerMins');
     if (mins) mins.value = String([0, 5, 10, 15].includes(Number(n.prayerMins)) ? Number(n.prayerMins) : 5);
     const vol = document.getElementById('ntVolume');
@@ -342,6 +344,7 @@ function bindNotifyUI() {
   on('ntTasks', el => { settings.notify.tasks = el.checked; toast(el.checked ? '🔔 تذكيرات المهام شغالة' : '🔕 تذكيرات المهام متوقفة'); });
   on('ntOverdue', el => { settings.notify.overdue = el.checked; settings.overdueNotify = el.checked; });
   on('ntSound', el => { settings.notify.sound = el.checked; settings.sound = el.checked; if (el.checked) playBeep(); });
+  on('ntChatFloat', el => { toggleChatFloat(el.checked); });
   on('ntVolume', el => { settings.volume = Number(el.value) || 0; settings.notify.volume = settings.volume; });
   const mins = document.getElementById('ntPrayerMins');
   if (mins) mins.addEventListener('change', () => { settings.notify.prayerMins = Number(mins.value) || 0; prayerScheduledKey = ''; schedulePrayerAlarms(); save(); });
@@ -401,7 +404,33 @@ document.getElementById('sizeRow').addEventListener('click', e => {
   applyUI(); save();
 });
 
-// ─── Filter chips (original behavior kept) ─────────────
+// ─── Floating assistant toggle (requests site permission once) ─
+async function toggleChatFloat(wantOn) {
+  try {
+    settings.chatFloat = settings.chatFloat || {};
+    if (!wantOn) {
+      settings.chatFloat.on = false;
+      save(); applyNotifyUI();
+      toast('🤖 المساعد العائم متوقف');
+      return;
+    }
+    // Request <all_urls> once (optional_host_permissions → no install warning)
+    let granted = true;
+    try {
+      if (chrome.permissions && chrome.permissions.request) {
+        granted = await chrome.permissions.request({ origins: ['<all_urls>'] });
+      }
+    } catch (e) { granted = true; }
+    if (!granted) {
+      toast('⚠️ اترفض إذن المواقع — الزر مش هيظهر');
+      applyNotifyUI();
+      return;
+    }
+    settings.chatFloat.on = true;
+    save(); applyNotifyUI();
+    toast('🤖 المساعد شغال — أعد تحميل صفحاتك المفتوحة');
+  } catch (e) { toast('⚠️ تعذر التفعيل'); }
+}
 document.getElementById('filterRow').addEventListener('click', e => {
   if (!e.target.dataset.filter) return;
   document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
