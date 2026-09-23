@@ -229,6 +229,15 @@
   try {
     const rb = document.getElementById('btnAdminRefresh');
     if (rb) rb.addEventListener('click', () => renderAdminUsers());
+    // Full web dashboard (separate repo, same Firebase project)
+    const db = document.getElementById('btnAdminDash');
+    if (db) db.addEventListener('click', () => {
+      const url = 'https://abdelrahmanshoaib.github.io/taskflo-admin/';
+      try {
+        if (chrome.tabs && chrome.tabs.create) chrome.tabs.create({ url });
+        else window.open(url, '_blank');
+      } catch (e) { try { window.open(url, '_blank'); } catch (_) {} }
+    });
     const ab = document.getElementById('btnAdAdd');
     if (ab) ab.addEventListener('click', async () => {
       try {

@@ -42,9 +42,9 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // App data: owner only; expired subscriptions lose WRITE (read kept so nothing is lost)
+    // App data: owner read/write; admin reads for dashboard stats; expired subs lose WRITE (read kept so nothing is lost)
     match /users/{uid}/data/{doc=**} {
-      allow read: if isOwner(uid);
+      allow read: if isOwner(uid) || isAdmin();
       allow write: if isOwner(uid) && (isAdmin() || subActive(uid));
     }
   }
