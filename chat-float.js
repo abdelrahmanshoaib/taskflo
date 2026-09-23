@@ -167,22 +167,35 @@
     '.tf-bubble:hover{transform:scale(1.08)}',
     '.tf-bubble.dragging{cursor:grabbing;transform:scale(1.05);opacity:.92}',
     '.tf-panel{position:fixed;bottom:88px;left:20px;width:320px;max-height:440px;z-index:2147483647;',
-    'background:#fff;color:#1d2733;border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,.3);',
-    'display:none;flex-direction:column;overflow:hidden;font-family:sans-serif;}',
+    'background:var(--pbg,#fff);color:var(--pcol,#1d2733);border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,.3);',
+    'display:none;flex-direction:column;overflow:hidden;font-family:var(--ffam,sans-serif);}',
     '.tf-panel.open{display:flex}',
-    '.tf-head{background:linear-gradient(135deg,#01939b,#6d28d9);color:#fff;padding:10px 12px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px}',
-    '.tf-head button{margin-right:auto;background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;width:24px;height:24px;cursor:pointer}',
-    '.tf-msgs{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:180px;max-height:280px}',
-    '.tf-msg{padding:8px 10px;border-radius:12px;font-size:12.5px;line-height:1.7;max-width:88%}',
-    '.tf-bot{background:#eef2f7;color:#1d2733;align-self:flex-start}',
-    '.tf-user{background:linear-gradient(135deg,#01939b,#01696f);color:#fff;align-self:flex-end}',
+    '.tf-head{background:linear-gradient(135deg,#01939b,#6d28d9);color:#fff;padding:10px 12px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px}',
+    '.tf-head span{flex:1}',
+    '.tf-head button{background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;min-width:24px;height:24px;cursor:pointer;font-size:12px}',
+    '.tf-head button:hover{background:rgba(255,255,255,.35)}',
+    '.tf-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;min-height:180px;max-height:280px}',
+    '.tf-msg{padding:9px 12px;border-radius:14px;font-size:var(--msize,13px);line-height:1.9;max-width:90%;white-space:pre-wrap;overflow-wrap:anywhere;}',
+    '.tf-bot{background:var(--bbg,#eef2f7);color:var(--bcol,#1d2733);align-self:flex-start;border:1px solid rgba(0,0,0,.07)}',
+    '.tf-user{background:var(--ubg,linear-gradient(135deg,#01939b,#01696f));color:var(--ucol,#fff);align-self:flex-end}',
     '.tf-chips{display:flex;gap:6px;padding:0 10px 8px;flex-wrap:wrap}',
     '.tf-chip{border:1px solid #cbd5e1;background:#f8fafc;border-radius:99px;padding:4px 10px;font-size:11px;cursor:pointer}',
     '.tf-chip:hover{background:#e0f2f1}',
     '.tf-input{display:flex;gap:6px;padding:10px;border-top:1px solid #e5e7eb}',
     '.tf-input input{flex:1;border:1px solid #cbd5e1;border-radius:10px;padding:8px;font-size:12.5px;outline:none;font-family:inherit}',
     '.tf-input button{background:linear-gradient(135deg,#01939b,#01696f);color:#fff;border:none;border-radius:10px;padding:8px 14px;cursor:pointer;font-weight:700}',
-    '.tf-typing{font-size:11px;color:#888;padding:0 10px 6px}'
+    '.tf-typing{font-size:11px;color:#888;padding:0 10px 6px}',
+    '.tf-set{display:none;flex-direction:column;gap:8px;padding:10px 12px;overflow-y:auto;max-height:240px;font-size:12px;border-bottom:1px solid rgba(0,0,0,.08)}',
+    '.tf-set.open{display:flex}',
+    '.tf-set label{font-weight:700;font-size:11px;opacity:.75}',
+    '.tf-set select{width:100%;padding:6px 8px;border-radius:8px;border:1px solid #cbd5e1;font-size:12px;font-family:inherit;background:#fff;color:#111}',
+    '.tf-set input[type=range]{width:100%}',
+    '.tf-srow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}',
+    '.tf-swatches{display:flex;gap:6px}',
+    '.tf-sw{width:28px;height:28px;border-radius:50%;border:2px solid transparent;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;background:#f1f5f9}',
+    '.tf-sw.on{border-color:#01939b}',
+    '.tf-cpick{display:flex;align-items:center;gap:4px;font-size:11px}',
+    '.tf-cpick input{width:30px;height:24px;padding:0;border:1px solid #cbd5e1;border-radius:6px;background:none;cursor:pointer}'
   ].join('\n');
 
   function inject() {
@@ -201,8 +214,25 @@
     const panel = document.createElement('div');
     panel.className = 'tf-panel';
     panel.innerHTML =
-      '<div class="tf-head"><span>🤖 مساعد TaskFlow</span><button data-x>✕</button></div>' +
+      '<div class="tf-head"><span>🤖 مساعد TaskFlow</span><button data-cfg title="تخصيص الشات">⚙️</button><button data-x>✕</button></div>' +
       '<div class="tf-msgs"></div><div class="tf-typing" style="display:none">بيكتب...</div>' +
+      '<div class="tf-set">' +
+      '<label>🔤 الخط</label><select data-s-font>' +
+      '<option value="system">النظام</option><option value="cairo">كايرو</option>' +
+      '<option value="almarai">المراعي</option><option value="tajawal">تجوال</option></select>' +
+      '<label>🔠 حجم الخط: <span data-s-sizev>13</span></label>' +
+      '<input type="range" min="11" max="18" step="1" data-s-size />' +
+      '<label>🎨 المظهر</label><div class="tf-swatches" data-s-mode>' +
+      '<button class="tf-sw" data-mode="light" title="فاتح">☀️</button>' +
+      '<button class="tf-sw" data-mode="dark" title="داكن">🌙</button>' +
+      '<button class="tf-sw" data-mode="custom" title="مخصص">🎨</button></div>' +
+      '<div class="tf-srow"><span class="tf-cpick">الخلفية <input type="color" data-c-pbg /></span>' +
+      '<span class="tf-cpick">رسالتي <input type="color" data-c-ubg /></span></div>' +
+      '<div class="tf-srow"><span class="tf-cpick">لون كلامي <input type="color" data-c-ucol /></span>' +
+      '<span class="tf-cpick">ردوده <input type="color" data-c-bbg /></span></div>' +
+      '<div class="tf-srow"><span class="tf-cpick">لون كلامه <input type="color" data-c-bcol /></span>' +
+      '<button class="tf-chip" data-s-reset>↺ افتراضي</button></div>' +
+      '</div>' +
       '<div class="tf-chips">' +
       '<button class="tf-chip" data-q="tasks">📋 مهامي النهاردة؟</button>' +
       '<button class="tf-chip" data-q="cheer">💪 شجعني</button>' +
@@ -263,6 +293,8 @@
       else if (q === 'cheer') askAI('شجعني أكمل يومي بحماس');
       else { userSay('عايز أضيف مهمة جديدة'); askAI('عايز أضيف مهمة جديدة — اسألني عن تفاصيلها سؤال واحد مختصر'); }
     }));
+    bindChatStyleUI();
+    applyChatStyle();
   }
   // ─── Appearance + position (customizable from extension settings)
   function applyFloatStyle() {
@@ -333,6 +365,7 @@
     if (!els.msgs) return;
     const d = document.createElement('div');
     d.className = 'tf-msg tf-bot';
+    d.setAttribute('dir', 'auto');
     d.textContent = html;
     els.msgs.appendChild(d);
     els.msgs.scrollTop = els.msgs.scrollHeight;
@@ -341,6 +374,7 @@
   function userSay(text) {
     const d = document.createElement('div');
     d.className = 'tf-msg tf-user';
+    d.setAttribute('dir', 'auto');
     d.textContent = text;
     els.msgs.appendChild(d);
     els.msgs.scrollTop = els.msgs.scrollHeight;
@@ -358,6 +392,7 @@
       h.forEach(m => {
         const d = document.createElement('div');
         d.className = 'tf-msg ' + (m.role === 'user' ? 'tf-user' : 'tf-bot');
+        d.setAttribute('dir', 'auto');
         d.textContent = m.text;
         els.msgs.appendChild(d);
       });
@@ -400,6 +435,114 @@
     }
   }
 
+  // ─── Chat appearance (customizable live from inside the chat)
+  const CHAT_FONTS = {
+    system: 'sans-serif',
+    cairo: "'Cairo',sans-serif",
+    almarai: "'Almarai',sans-serif",
+    tajawal: "'Tajawal',sans-serif"
+  };
+  const CHAT_FONT_URL = 'https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&family=Almarai:wght@400;700&family=Tajawal:wght@400;700&display=swap';
+  const CHAT_MODES = {
+    light: { pbg: '#ffffff', pcol: '#1d2733', ubg: 'linear-gradient(135deg,#01939b,#01696f)', ucol: '#ffffff', bbg: '#eef2f7', bcol: '#1d2733' },
+    dark: { pbg: '#1e293b', pcol: '#f1f5f9', ubg: 'linear-gradient(135deg,#0ea5e9,#6d28d9)', ucol: '#ffffff', bbg: '#334155', bcol: '#f1f5f9' }
+  };
+  const CHAT_DEFAULTS = { font: 'system', size: 13, mode: 'light', pbg: '', ubg: '', ucol: '', bbg: '', bcol: '' };
+  let chatStyle = Object.assign({}, CHAT_DEFAULTS);
+  let chatFontsLoaded = false;
+  function loadChatFont() {
+    if (chatFontsLoaded || chatStyle.font === 'system') return;
+    try {
+      if (shadow && !shadow.querySelector('link[data-tf-font]')) {
+        const l = document.createElement('link');
+        l.setAttribute('data-tf-font', '1');
+        l.rel = 'stylesheet';
+        l.href = CHAT_FONT_URL;
+        shadow.appendChild(l);
+      }
+      chatFontsLoaded = true;
+    } catch (e) {}
+  }
+  function applyChatStyle() {
+    if (!els.panel) return;
+    try {
+      const m = chatStyle.mode === 'dark' ? CHAT_MODES.dark : CHAT_MODES.light;
+      const pick = (v, fb) => (v && String(v).trim() ? String(v).trim() : fb);
+      const custom = chatStyle.mode === 'custom';
+      const p = els.panel.style;
+      p.setProperty('--ffam', CHAT_FONTS[chatStyle.font] || CHAT_FONTS.system);
+      p.setProperty('--msize', (Math.min(18, Math.max(11, Number(chatStyle.size) || 13))) + 'px');
+      p.setProperty('--pbg', custom ? pick(chatStyle.pbg, m.pbg) : m.pbg);
+      p.setProperty('--pcol', m.pcol);
+      p.setProperty('--ubg', custom ? pick(chatStyle.ubg, m.ubg) : m.ubg);
+      p.setProperty('--ucol', custom ? pick(chatStyle.ucol, m.ucol) : m.ucol);
+      p.setProperty('--bbg', custom ? pick(chatStyle.bbg, m.bbg) : m.bbg);
+      p.setProperty('--bcol', custom ? pick(chatStyle.bcol, m.bcol) : m.bcol);
+      loadChatFont();
+      syncChatStyleUI();
+    } catch (e) {}
+  }
+  function syncChatStyleUI() {
+    try {
+      if (!els.panel) return;
+      const q = (s) => els.panel.querySelector(s);
+      const fs = q('[data-s-font]'), sz = q('[data-s-size]'), sv = q('[data-s-sizev]');
+      if (fs) fs.value = chatStyle.font || 'system';
+      if (sz) sz.value = chatStyle.size || 13;
+      if (sv) sv.textContent = chatStyle.size || 13;
+      els.panel.querySelectorAll('[data-s-mode] .tf-sw').forEach(b => b.classList.toggle('on', b.dataset.mode === (chatStyle.mode || 'light')));
+      const setC = (sel, v, fb) => { const el = q(sel); if (el) el.value = /^#[0-9a-f]{6}$/i.test(v || '') ? v : fb; };
+      const m = chatStyle.mode === 'dark' ? CHAT_MODES.dark : CHAT_MODES.light;
+      setC('[data-c-pbg]', chatStyle.pbg, m.pbg);
+      setC('[data-c-ubg]', chatStyle.ubg, '#01939b');
+      setC('[data-c-ucol]', chatStyle.ucol, '#ffffff');
+      setC('[data-c-bbg]', chatStyle.bbg, '#eef2f7');
+      setC('[data-c-bcol]', chatStyle.bcol, '#1d2733');
+    } catch (e) {}
+  }
+  async function saveChatStyle() {
+    try {
+      const r = await storeGet(['settings']);
+      const s = r.settings || {};
+      s.chatStyle = Object.assign({}, chatStyle);
+      await storeSet({ settings: s });
+    } catch (e) {}
+  }
+  function bindChatStyleUI() {
+    try {
+      if (!els.panel) return;
+      const q = (s) => els.panel.querySelector(s);
+      const setBox = q('.tf-set');
+      const gear = q('[data-cfg]');
+      if (gear && setBox) gear.addEventListener('click', () => {
+        setBox.classList.toggle('open');
+        if (setBox.classList.contains('open')) { applyChatStyle(); }
+      });
+      const fs = q('[data-s-font]');
+      if (fs) fs.addEventListener('change', () => { chatStyle.font = fs.value; chatFontsLoaded = false; applyChatStyle(); saveChatStyle(); });
+      const sz = q('[data-s-size]');
+      if (sz) sz.addEventListener('input', () => { chatStyle.size = Number(sz.value) || 13; applyChatStyle(); });
+      if (sz) sz.addEventListener('change', () => { saveChatStyle(); });
+      els.panel.querySelectorAll('[data-s-mode] .tf-sw').forEach(b => b.addEventListener('click', () => {
+        chatStyle.mode = b.dataset.mode;
+        applyChatStyle(); saveChatStyle();
+      }));
+      [['[data-c-pbg]', 'pbg'], ['[data-c-ubg]', 'ubg'], ['[data-c-ucol]', 'ucol'], ['[data-c-bbg]', 'bbg'], ['[data-c-bcol]', 'bcol']].forEach(([sel, key]) => {
+        const el = q(sel);
+        if (el) {
+          el.addEventListener('input', () => { chatStyle.mode = 'custom'; chatStyle[key] = el.value; applyChatStyle(); });
+          el.addEventListener('change', () => { saveChatStyle(); });
+        }
+      });
+      const rs = q('[data-s-reset]');
+      if (rs) rs.addEventListener('click', () => {
+        chatStyle = Object.assign({}, CHAT_DEFAULTS);
+        chatFontsLoaded = false;
+        applyChatStyle(); saveChatStyle();
+      });
+    } catch (e) {}
+  }
+
   // ─── Boot: respect the extension toggle (live via storage listener) ───
   // Test hook (isolated world only, invisible to pages): window.__tfFloat
   try { window.__tfFloat = { ask: askAI, sync: syncVisibility, state, ui: () => els, cfg: () => lastFloatCfg }; } catch (e) {}
@@ -415,9 +558,10 @@
       };
       const on = !!cf.on;
       const exists = !!document.getElementById('taskflo-float-root');
+      chatStyle = Object.assign({}, CHAT_DEFAULTS, (r.settings && r.settings.chatStyle) || {});
       if (on && !exists) inject();
       else if (!on && exists) removeUI();
-      else if (on && exists) applyFloatStyle();
+      else if (on && exists) { applyFloatStyle(); applyChatStyle(); }
     } catch (e) {}
   }
   try {
