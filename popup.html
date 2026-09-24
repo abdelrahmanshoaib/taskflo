@@ -1233,9 +1233,19 @@
     </div>
   </div>
   <div class="acc-card">
-    <div class="section-label">✨ ذكاء اصطناعي (Gemini)</div>
+    <div class="section-label">✨ ذكاء اصطناعي (متعدد — تبديل تلقائي)</div>
+    <div class="acc-status" id="aiLastUsed">...</div>
+    <div class="acc-hint">المفاتيح محفوظة <b>على جهازك فقط</b> — لا تُرفع للسحابة ولا تدخل النسخ الاحتياطي. لو مزود عطل، التاني يرد تلقائياً بنفس السياق.</div>
+    <div class="form-group">
+      <label class="form-label">🔀 ترتيب التجربة</label>
+      <select class="form-select" id="aiOrderSelect">
+        <option value="gemini-first">✨ Gemini أولاً ثم ⚡ Grok</option>
+        <option value="grok-first">⚡ Grok أولاً ثم ✨ Gemini</option>
+      </select>
+    </div>
+    <div class="section-label">✨ Gemini</div>
     <div class="acc-status" id="aiKeyStatus">...</div>
-    <div class="acc-hint">المفتاح محفوظ <b>على جهازك فقط</b> — لا يُرفع للسحابة ولا يدخل النسخ الاحتياطي. هاته مجاناً من <b>aistudio.google.com ← Get API key</b>.</div>
+    <div class="acc-hint">هاته مجاناً من <b>aistudio.google.com ← Get API key</b>.</div>
     <div class="form-group">
       <label class="form-label">Gemini API Key</label>
       <input class="form-input" id="aiKeyInput" type="password" placeholder="AIza..." dir="ltr" autocomplete="off" />
@@ -1248,6 +1258,22 @@
       <button class="mini-btn go" id="btnAiSave" style="flex:1">💾 حفظ المفتاح</button>
       <button class="mini-btn" id="btnAiTest">🔍 تجربة</button>
       <button class="mini-btn" id="btnAiDel">🗑️ مسح</button>
+    </div>
+    <div class="section-label" style="margin-top:6px">⚡ Grok (xAI)</div>
+    <div class="acc-status" id="aiKeyStatusGrok">...</div>
+    <div class="acc-hint">هاته من <b>console.x.ai ← API Keys</b>.</div>
+    <div class="form-group">
+      <label class="form-label">Grok API Key</label>
+      <input class="form-input" id="aiKeyInputGrok" type="password" placeholder="xai-..." dir="ltr" autocomplete="off" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">الموديل</label>
+      <input class="form-input" id="aiModelInputGrok" dir="ltr" placeholder="grok-4" autocomplete="off" />
+    </div>
+    <div class="acc-row">
+      <button class="mini-btn go" id="btnAiSaveGrok" style="flex:1">💾 حفظ المفتاح</button>
+      <button class="mini-btn" id="btnAiTestGrok">🔍 تجربة</button>
+      <button class="mini-btn" id="btnAiDelGrok">🗑️ مسح</button>
     </div>
   </div>
 </div>
@@ -1623,6 +1649,7 @@
 <script src="popup.js"></script>
 <script src="account.js"></script>
 <script src="admin.js"></script>
+<script src="ai-providers.js"></script>
 <script src="ai.js"></script>
 </body>
 </html>

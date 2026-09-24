@@ -7,7 +7,8 @@
   if (window.top !== window.self) return; // top frame only
   if (document.getElementById('taskflo-float-root')) return;
 
-  const MODEL_FALLBACK = 'gemini-3.6-flash';
+  // Note: AI requests go through window.TaskfloProviders (ai-providers.js,
+  // loaded before this file): multi-API (Gemini + Grok) with auto failover.
   const FLOAT_THEMES = {
     grape: 'linear-gradient(135deg,#01939b,#6d28d9)',
     ocean: 'linear-gradient(135deg,#3b82f6,#1565d8)',
@@ -152,65 +153,13 @@
     return true;
   }
 
-  // Smart throttling (mirrors ai.js): cooldown after quota + min gap
-  let quotaCooldownUntil = 0;
-  let lastCallAt = 0;
-  function isQuotaLike(em) {
-    em = String(em || '');
-    return (/quota|RESOURCE_EXHAUSTED|rate.limit|too many/i.test(em) || /\b429\b/.test(em)) &&
-      !/overloaded|high demand|UNAVAILABLE/i.test(em) && !/\b503\b/.test(em);
-  }
-  function isOverloadLike(em) {
-    em = String(em || '');
-    return /overloaded|high demand|UNAVAILABLE/i.test(em) || /\b503\b/.test(em);
-  }
-  function friendlyGeminiError(em) {
-    em = String(em || '');
-    const cd = em.match(/^COOLDOWN:(\d+)/);
-    if (cd) return '⏳ اهدى ' + cd[1] + ' ثانية وبعدين ابعت — السرعة الزيادة هي اللي بتقفل الحصة ⏳';
-    if (/high demand|overloaded|UNAVAILABLE/i.test(em) || /\b503\b/.test(em)) return '⏳ ضغط عالي على جوجل دلوقتي — استنى دقيقة وحاول تاني ⏳';
-    if (/quota|RESOURCE_EXHAUSTED/i.test(em) || /\b429\b/.test(em)) return '⚠️ حصة الاستخدام خلصت مؤقتاً — استنى شوية وحاول تاني';
-    return '❌ ' + em.slice(0, 100);
-  }
-  async function geminiFetch(url, body, tries) {
-    tries = tries || 3;
-    if (Date.now() < quotaCooldownUntil) {
-      throw new Error(friendlyGeminiError('COOLDOWN:' + Math.ceil((quotaCooldownUntil - Date.now()) / 1000)));
-    }
-    // Free tier ≈ few requests/min: enforce 5s gap so normal chatting never trips it
-    const gap = Date.now() - lastCallAt;
-    if (gap < 5000) await new Promise(r => setTimeout(r, 5000 - gap));
-    lastCallAt = Date.now();
-    let lastErr = 'unknown';
-    for (let i = 0; i < tries; i++) {
-      try {
-        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        const j = await res.json().catch(() => ({}));
-        if (res.ok) return j;
-        lastErr = String((j && j.error && j.error.message) || res.status);
-        if (isQuotaLike(lastErr)) {
-          quotaCooldownUntil = Date.now() + 120000;
-          break;
-        }
-        if (!isOverloadLike(lastErr)) break;
-      } catch (e) {
-        lastErr = String((e && e.message) || e);
-      }
-      if (i < tries - 1) await new Promise(r => setTimeout(r, 1500 * (i + 1)));
-    }
-    throw new Error(friendlyGeminiError(lastErr));
-  }
-  async function callGemini(key, model, messages) {
-    const j = await geminiFetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/' + (model || MODEL_FALLBACK) + ':generateContent?key=' + encodeURIComponent(key),
-      {
-        systemInstruction: { parts: [{ text: systemPrompt(messages._ctx || '', messages._persona || lastPersona) }] },
-        contents: messages.list,
-        generationConfig: { temperature: 0.8, maxOutputTokens: 350 }
-      }
-    );
-    const parts = ((((j.candidates || [])[0] || {}).content || {}).parts) || [];
-    return parts.map(p => p.text || '').join('').trim();
+  // ─── AI via shared providers engine (ai-providers.js) with auto failover ───
+  function setHeadProvider(id) {
+    try {
+      var P = (window.TaskfloProviders && window.TaskfloProviders.PROVIDERS) || {};
+      var name = (P[id] && (P[id].icon + ' ' + P[id].name)) || '';
+      if (els.headTitle) els.headTitle.textContent = '🤖 مساعد TaskFlow' + (name ? ' • ' + name : '');
+    } catch (e) {}
   }
 
   // ─── UI (Shadow DOM — isolated from page styles) ───
@@ -324,6 +273,7 @@
     shadow.appendChild(panel);
     els = {
       bubble, panel, ico, dot,
+      headTitle: panel.querySelector('.tf-head span'),
       msgs: panel.querySelector('.tf-msgs'),
       typing: panel.querySelector('.tf-typing'),
       input: panel.querySelector('.tf-input input')
@@ -528,15 +478,26 @@
     state.busy = true;
     if (els.typing) els.typing.style.display = '';
     try {
-      const data = await storeGet(['geminiKey', 'geminiModel', 'tasks', 'settings', 'prayerDone']);
-      if (!data.geminiKey) {
-        botSay('⚠️ حط مفتاح Gemini الأول من الإكستنشن (تاب حسابي ← ذكاء اصطناعي) وأنا جاهز.');
+      if (!window.TaskfloProviders) {
+        botSay('❌ مكتبة المزودين مش متحملة — حدّث الإكستنشن وأعد تحميل الصفحة.');
+        return;
+      }
+      const data = await storeGet(['tasks', 'settings', 'prayerDone']);
+      const ps = await window.TaskfloProviders.getProviders();
+      if (!ps.some(p => p.on && p.key)) {
+        botSay('⚠️ حط مفتاح AI الأول من الإكستنشن (تاب حسابي ← ذكاء اصطناعي: Gemini أو Grok) وأنا جاهز.');
         return;
       }
       const ctx = buildContext(data);
       const persona = ((data.settings || {}).persona) || {};
       const hist = state.history.slice(-8).map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] }));
-      const reply = await callGemini(data.geminiKey, data.geminiModel || MODEL_FALLBACK, { _ctx: ctx, _persona: persona, list: hist.concat([{ role: 'user', parts: [{ text }] }]) });
+      const r = await window.TaskfloProviders.callChat({
+        system: systemPrompt(ctx, persona),
+        messages: hist.concat([{ role: 'user', parts: [{ text }] }]),
+        maxTokens: 350, temperature: 0.8
+      });
+      setHeadProvider(r.provider);
+      const reply = r.text;
       const visible = String(reply || '').replace(/```task[\s\S]*?```/g, '').trim() || 'تمام 👍';
       botSay(visible);
       chatBlip();

@@ -1,189 +1,154 @@
-// ─── Taskflo Gemini AI (local key, REST, MV3-safe, modular) ───
-// SECURITY: the key lives in chrome.storage.local under 'geminiKey' ONLY.
-// It is deliberately NOT inside `settings`, so it never syncs to Firestore
-// and never enters file/clipboard backups. Never logged, never toasted.
+// ─── Taskflo AI settings UI (multi-provider) + task enhance ───
+// Keys UI for Gemini + Grok lives in the account tab. Actual requests +
+// failover live in ai-providers.js (window.TaskfloProviders).
+// SECURITY: keys stay in chrome.storage.local ('aiProviders') ONLY — never
+// sync, never backup, never logged, never toasted.
 (function () {
-  const DEFAULT_MODEL = 'gemini-3.6-flash';
-  function ep(key, model) {
-    return 'https://generativelanguage.googleapis.com/v1beta/models/' + (model || DEFAULT_MODEL) + ':generateContent?key=' + encodeURIComponent(key);
-  }
   function $(id) { return document.getElementById(id); }
   function say(msg) { if (typeof toast === 'function') toast(msg); }
+  function shortErr(e) {
+    var m = String((e && e.message) || e);
+    return /^[⏳⚠️✅❌🌐]/.test(m) ? m.slice(0, 140) : '❌ ' + m.slice(0, 120);
+  }
+  function P() { return window.TaskfloProviders; }
+  var UI = {
+    gemini: { key: 'aiKeyInput', model: 'aiModelInput', save: 'btnAiSave', test: 'btnAiTest', del: 'btnAiDel', status: 'aiKeyStatus', delConfirm: 'مسح مفتاح Gemini من هذا الجهاز؟' },
+    grok: { key: 'aiKeyInputGrok', model: 'aiModelInputGrok', save: 'btnAiSaveGrok', test: 'btnAiTestGrok', del: 'btnAiDelGrok', status: 'aiKeyStatusGrok', delConfirm: 'مسح مفتاح Grok من هذا الجهاز؟' }
+  };
 
-  async function getKey() {
-    return new Promise((resolve) => {
-      try { chrome.storage.local.get(['geminiKey'], (r) => resolve((r && r.geminiKey) || '')); }
-      catch (e) { resolve(''); }
-    });
+  // ── Legacy-compatible accessors (Gemini entry) ──
+  async function prov(id) {
+    var ps = await P().getProviders();
+    return ps.find(function (p) { return p.id === id; });
   }
-  async function setKey(k) {
-    return new Promise((resolve) => {
-      try { chrome.storage.local.set({ geminiKey: k || '' }, () => resolve()); }
-      catch (e) { resolve(); }
-    });
-  }
-  async function getModel() {
-    return new Promise((resolve) => {
-      try { chrome.storage.local.get(['geminiModel'], (r) => resolve((r && r.geminiModel) || DEFAULT_MODEL)); }
-      catch (e) { resolve(DEFAULT_MODEL); }
-    });
-  }
-  async function setModel(m) {
-    return new Promise((resolve) => {
-      try { chrome.storage.local.set({ geminiModel: m || DEFAULT_MODEL }, () => resolve()); }
-      catch (e) { resolve(); }
-    });
-  }
-  // Smart throttling: cooldown after quota + min gap (free tier = few req/min)
-  let quotaCooldownUntil = 0;
-  let lastCallAt = 0;
-  function isQuotaLike(em) {
-    em = String(em || '');
-    return (/quota|RESOURCE_EXHAUSTED|rate.limit|too many/i.test(em) || /\b429\b/.test(em)) &&
-      !/overloaded|high demand|UNAVAILABLE/i.test(em) && !/\b503\b/.test(em);
-  }
-  function isOverloadLike(em) {
-    em = String(em || '');
-    return /overloaded|high demand|UNAVAILABLE/i.test(em) || /\b503\b/.test(em);
-  }
-  function friendlyGeminiError(em) {
-    em = String(em || '');
-    const cd = em.match(/^COOLDOWN:(\d+)/);
-    if (cd) return '⏳ اهدى ' + cd[1] + ' ثانية وبعدين حاول — الإرسال السريع المتكرر هو اللي بيقفل الحصة';
-    if (/API_KEY_INVALID|API key not valid/i.test(em)) return 'المفتاح غير صالح — انسخه تاني من AI Studio';
-    if (/high demand|overloaded|UNAVAILABLE/i.test(em) || /\b503\b/.test(em)) return '⏳ ضغط عالي على سيرفرات جوجل دلوقتي — استنى دقيقة وحاول تاني';
-    if (/quota|RESOURCE_EXHAUSTED/i.test(em) || /\b429\b/.test(em)) return '⚠️ خلصت حصة الاستخدام المجاني مؤقتاً — استنى شوية وحاول تاني';
-    if (/not found/i.test(em) || /\b404\b/.test(em)) return 'الموديل مش متاح — غيّره من خانة الموديل في تاب حسابي';
-    return 'Gemini رد بخطأ: ' + em.slice(0, 100);
-  }
-  // POST with auto-retry ONLY on transient overload/network.
-  // Quota/rate errors: NO retry + 90s cooldown (retrying worsens the block).
-  async function geminiFetch(url, body, tries) {
-    tries = tries || 3;
-    if (Date.now() < quotaCooldownUntil) {
-      throw new Error(friendlyGeminiError('COOLDOWN:' + Math.ceil((quotaCooldownUntil - Date.now()) / 1000)));
-    }
-    const gap = Date.now() - lastCallAt;
-    if (gap < 5000) await new Promise(r => setTimeout(r, 5000 - gap));
-    lastCallAt = Date.now();
-    let lastErr = 'unknown';
-    for (let i = 0; i < tries; i++) {
-      try {
-        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        const j = await res.json().catch(() => ({}));
-        if (res.ok) return j;
-        lastErr = String((j && j.error && j.error.message) || res.status);
-        if (isQuotaLike(lastErr)) {
-          quotaCooldownUntil = Date.now() + 120000;
-          break;
-        }
-        if (!isOverloadLike(lastErr)) break; // 400/401/404...: retrying is pointless
-      } catch (e) {
-        // Network failure: transient → retry
-        lastErr = String((e && e.message) || e);
-      }
-      if (i < tries - 1) await new Promise(r => setTimeout(r, 1500 * (i + 1)));
-    }
-    throw new Error(friendlyGeminiError(lastErr));
-  }
-  async function callGemini(key, userText, wantJson) {
-    const model = await getModel();
-    const body = {
-      systemInstruction: { parts: [{ text: 'أنت مساعد إنتاجية داخل إضافة مهام. التزم بالتنسيق المطلوب حرفياً.' }] },
-      contents: [{ parts: [{ text: userText }] }],
-      generationConfig: { temperature: 0.7, maxOutputTokens: 800 }
-    };
-    if (wantJson) body.generationConfig.responseMimeType = 'application/json';
-    const j = await geminiFetch(ep(key, model), body);
-    const parts = ((((j.candidates || [])[0] || {}).content || {}).parts) || [];
-    const txt = parts.map(p => p.text || '').join('').trim();
-    if (!wantJson) return txt;
-    const clean = txt.replace(/^```json/i, '').replace(/^```/, '').replace(/```\s*$/, '').trim();
-    return JSON.parse(clean);
-  }
+  async function getKey() { var p = await prov('gemini'); return p ? p.key : ''; }
+  async function setKey(k) { await P().saveProvider('gemini', { key: k || '' }); }
+  async function getModel() { var p = await prov('gemini'); return (p && p.model) || P().PROVIDERS.gemini.defaultModel; }
+  async function setModel(m) { await P().saveProvider('gemini', { model: m || P().PROVIDERS.gemini.defaultModel }); }
+  var DEFAULT_MODEL = 'gemini-3.6-flash';
+
   async function testKey(key) {
-    const k = key !== undefined ? key : await getKey();
+    var k = key !== undefined ? key : await getKey();
     if (!k) throw new Error('اكتب المفتاح الأول');
-    const out = await callGemini(k, 'رد بكلمة واحدة فقط: تم', false);
-    if (!out) throw new Error('رد فارغ — حاول تاني');
+    await P().testProvider('gemini', k, await getModel());
     return true;
   }
   async function enhanceTask(title) {
-    const key = await getKey();
-    if (!key) throw new Error('حط مفتاح Gemini الأول من تاب حسابي');
-    const prompt = 'المهمة: "' + String(title).slice(0, 200) + '"\n' +
+    var ps = await P().getProviders();
+    if (!ps.some(function (p) { return p.on && p.key; })) throw new Error('حط مفتاح AI الأول من تاب حسابي (Gemini أو Grok)');
+    var prompt = 'المهمة: "' + String(title).slice(0, 200) + '"\n' +
       'أخرج JSON بهذا الشكل بالضبط (قيم عربية، مفاتيح إنجليزية): ' +
       '{"title":"عنوان محسن قصير","description":"وصف عملي سطرين","subtasks":["خطوة 1","خطوة 2","خطوة 3"],"priority":"urgent|high|medium|low","estMinutes":30,"tags":["وسم"]}';
-    return callGemini(key, prompt, true);
+    var r = await P().callJson({
+      system: 'أنت مساعد إنتاجية داخل إضافة مهام. التزم بالتنسيق المطلوب حرفياً.',
+      messages: [{ role: 'user', parts: [{ text: prompt }] }],
+      maxTokens: 800, temperature: 0.7
+    });
+    return r.data;
   }
   // Fills the open task modal for REVIEW — never auto-saves.
   async function enhanceModal() {
-    const titleEl = $('modalTitle');
-    const title = titleEl ? titleEl.value.trim() : '';
+    var titleEl = $('modalTitle');
+    var title = titleEl ? titleEl.value.trim() : '';
     if (!title) { say('⚠️ اكتب عنوان المهمة الأول'); if (titleEl) titleEl.focus(); return; }
-    if (!(await getKey())) { say('⚠️ حط مفتاح Gemini الأول (تاب حسابي ← ذكاء اصطناعي)'); return; }
+    var ps = await P().getProviders();
+    if (!ps.some(function (p) { return p.on && p.key; })) { say('⚠️ حط مفتاح AI الأول (تاب حسابي ← ذكاء اصطناعي)'); return; }
     say('✨ جاري التحسين...');
     try {
-      const d = await enhanceTask(title);
+      var d = await enhanceTask(title);
       if (d.title) titleEl.value = String(d.title).slice(0, 120);
-      const de = $('modalDesc');
+      var de = $('modalDesc');
       if (de && d.description) de.value = String(d.description).slice(0, 500);
-      const pr = $('modalPriority');
+      var pr = $('modalPriority');
       if (pr && ['urgent', 'high', 'medium', 'low'].includes(d.priority)) pr.value = d.priority;
-      const es = $('modalEst');
+      var es = $('modalEst');
       if (es && d.estMinutes) es.value = Math.max(0, parseInt(d.estMinutes, 10) || 0);
-      const tg = $('modalTags');
-      if (tg && Array.isArray(d.tags)) tg.value = d.tags.slice(0, 5).map(x => String(x).slice(0, 20)).join('، ');
-      const sb = $('modalSubs');
-      if (sb && Array.isArray(d.subtasks)) sb.value = d.subtasks.slice(0, 8).map(s => String(s).slice(0, 80)).join('\n');
+      var tg = $('modalTags');
+      if (tg && Array.isArray(d.tags)) tg.value = d.tags.slice(0, 5).map(function (x) { return String(x).slice(0, 20); }).join('، ');
+      var sb = $('modalSubs');
+      if (sb && Array.isArray(d.subtasks)) sb.value = d.subtasks.slice(0, 8).map(function (s) { return String(s).slice(0, 80); }).join('\n');
       say('✨ اتحسنت — راجع واحفظ 💾');
-    } catch (e) { const m = String((e && e.message) || e); say(/^[⏳⚠️✅❌]/.test(m) ? m.slice(0, 140) : '❌ ' + m.slice(0, 120)); }
+    } catch (e) { say(shortErr(e)); }
   }
+
+  function mask(k) { return k ? '••••••••' + String(k).slice(-4) : ''; }
   async function refreshStatus() {
     try {
-      const st = $('aiKeyStatus'), inp = $('aiKeyInput'), mdl = $('aiModelInput');
-      if (!st) return;
-      const k = await getKey();
-      const m = await getModel();
-      if (inp && document.activeElement !== inp) inp.value = k ? '••••••••' + String(k).slice(-4) : '';
-      if (inp && !k) inp.value = '';
-      if (mdl && document.activeElement !== mdl && !mdl.value) mdl.value = m;
-      st.textContent = k ? '✅ المفتاح محفوظ على هذا الجهاز (' + m + ')' : 'مفيش مفتاح — هاته من aistudio.google.com';
+      var ps = await P().getProviders();
+      ps.forEach(function (p) {
+        var u = UI[p.id];
+        if (!u) return;
+        var inp = $(u.key), mdl = $(u.model), st = $(u.status);
+        if (inp && document.activeElement !== inp) inp.value = p.key ? mask(p.key) : '';
+        if (mdl && document.activeElement !== mdl && !mdl.value) mdl.value = p.model;
+        if (st) {
+          var bits = [];
+          bits.push(p.key ? '✅ محفوظ (' + p.model + ')' : 'مفيش مفتاح');
+          if (!p.on) bits.push('⏸ متوقف');
+          st.textContent = bits.join(' · ');
+        }
+      });
+      var ord = $( 'aiOrderSelect');
+      if (ord) {
+        var cur = ps.map(function (p) { return p.id; });
+        ord.value = (cur[0] === 'grok') ? 'grok-first' : 'gemini-first';
+      }
+      var last = $('aiLastUsed');
+      if (last) {
+        var lp = await P().getLastProvider();
+        last.textContent = lp && P().PROVIDERS[lp] ? ('آخر رد كان عبر: ' + P().PROVIDERS[lp].icon + ' ' + P().PROVIDERS[lp].name) : 'لسه مفيش رد — أول مزود شغال هيرد عليك';
+      }
     } catch (e) {}
   }
-  function bindAI() {
-    const sv = $('btnAiSave'), ts = $('btnAiTest'), dl = $('btnAiDel');
-    if (sv) sv.addEventListener('click', async () => {
-      const inp = $('aiKeyInput'), mdl = $('aiModelInput');
-      const v = inp ? inp.value.trim() : '';
-      const m = mdl ? mdl.value.trim() : '';
-      if (m) await setModel(m);
+
+  function bindOne(id) {
+    var u = UI[id];
+    if (!u) return;
+    var sv = $(u.save), ts = $(u.test), dl = $(u.del);
+    var def = P().PROVIDERS[id];
+    if (sv) sv.addEventListener('click', async function () {
+      var inp = $(u.key), mdl = $(u.model);
+      var v = inp ? inp.value.trim() : '';
+      var m = mdl ? mdl.value.trim() : '';
+      if (m) await P().saveProvider(id, { model: m, on: true });
       if (!v || v.startsWith('••••')) {
-        if (m) { refreshStatus(); say('💾 اتحفظ الموديل'); }
+        if (m) { refreshStatus(); say('💾 اتحفظ الموديل (' + def.name + ')'); }
         else say('⚠️ اكتب المفتاح كاملاً الأول');
         return;
       }
-      await setKey(v);
+      await P().saveProvider(id, { key: v, on: true });
       if (inp) inp.value = '';
       refreshStatus();
-      say('💾 اتحفظ المفتاح على جهازك');
+      say('💾 اتحفظ مفتاح ' + def.name + ' على جهازك');
     });
-    if (ts) ts.addEventListener('click', async () => {
+    if (ts) ts.addEventListener('click', async function () {
       try {
-        say('🔍 جاري تجربة المفتاح...');
-        const inp = $('aiKeyInput'), mdl = $('aiModelInput');
-        if (mdl && mdl.value.trim()) await setModel(mdl.value.trim());
-        const typed = inp && inp.value.trim() && !inp.value.trim().startsWith('••••') ? inp.value.trim() : null;
-        await testKey(typed !== null ? typed : undefined);
+        say('🔍 جاري تجربة ' + def.name + '...');
+        var inp = $(u.key), mdl = $(u.model);
+        if (mdl && mdl.value.trim()) await P().saveProvider(id, { model: mdl.value.trim() });
+        var typed = inp && inp.value.trim() && !inp.value.trim().startsWith('••••') ? inp.value.trim() : null;
+        var key = typed !== null ? typed : (await prov(id)).key;
+        var model = mdl && mdl.value.trim() ? mdl.value.trim() : (await prov(id)).model;
+        await P().testProvider(id, key, model);
         refreshStatus();
-        say('✅ المفتاح شغال');
-      } catch (e) { const m = String((e && e.message) || e); say(/^[⏳⚠️✅❌]/.test(m) ? m.slice(0, 140) : '❌ ' + m.slice(0, 120)); }
+        say('✅ ' + def.name + ' شغال');
+      } catch (e) { say(shortErr(e)); }
     });
-    if (dl) dl.addEventListener('click', async () => {
-      if (!confirm('مسح مفتاح Gemini من هذا الجهاز؟')) return;
-      await setKey('');
+    if (dl) dl.addEventListener('click', async function () {
+      if (!confirm(u.delConfirm)) return;
+      await P().saveProvider(id, { key: '' });
       refreshStatus();
       say('🗑️ اتمسح المفتاح');
+    });
+  }
+  function bindAI() {
+    bindOne('gemini');
+    bindOne('grok');
+    var ord = $('aiOrderSelect');
+    if (ord) ord.addEventListener('change', async function () {
+      await P().setOrder(ord.value === 'grok-first' ? ['grok', 'gemini'] : ['gemini', 'grok']);
+      refreshStatus();
+      say('🔀 ترتيب التجربة: ' + (ord.value === 'grok-first' ? '⚡ Grok أولاً ثم ✨ Gemini' : '✨ Gemini أولاً ثم ⚡ Grok'));
     });
     refreshStatus();
   }
