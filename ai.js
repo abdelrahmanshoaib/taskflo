@@ -42,8 +42,9 @@
     var r = await P().callJson({
       system: 'أنت مساعد إنتاجية داخل إضافة مهام. التزم بالتنسيق المطلوب حرفياً.',
       messages: [{ role: 'user', parts: [{ text: prompt }] }],
-      maxTokens: 800, temperature: 0.7
+      maxTokens: 1500, temperature: 0.7
     });
+    if (r.note) say(String(r.note).slice(0, 140));
     return r.data;
   }
   // Fills the open task modal for REVIEW — never auto-saves.
@@ -98,6 +99,16 @@
         var lp = await P().getLastProvider();
         last.textContent = lp && P().PROVIDERS[lp] ? ('آخر رد كان عبر: ' + P().PROVIDERS[lp].icon + ' ' + P().PROVIDERS[lp].name) : 'لسه مفيش رد — أول مزود شغال هيرد عليك';
       }
+      await refreshKeysToggle();
+    } catch (e) {}
+  }
+  async function refreshKeysToggle() {
+    try {
+      var S = (typeof window !== 'undefined') ? window.TaskfloSync : null;
+      var box = $('aiKeysSyncChk');
+      if (!box || !S || !S.getPrefs) return;
+      var p = await S.getPrefs();
+      box.checked = p.aiKeys !== false;
     } catch (e) {}
   }
 
@@ -119,7 +130,7 @@
       await P().saveProvider(id, { key: v, on: true });
       if (inp) inp.value = '';
       refreshStatus();
-      say('💾 اتحفظ مفتاح ' + def.name + ' على جهازك');
+      say('💾 اتحفظ مفتاح ' + def.name + ' (وهيتزامن مع حسابك)');
     });
     if (ts) ts.addEventListener('click', async function () {
       try {
@@ -149,6 +160,23 @@
       await P().setOrder(ord.value === 'groq-first' ? ['groq', 'gemini'] : ['gemini', 'groq']);
       refreshStatus();
       say('🔀 ترتيب التجربة: ' + (ord.value === 'groq-first' ? '⚡ Groq أولاً ثم ✨ Gemini' : '✨ Gemini أولاً ثم ⚡ Groq'));
+    });
+    var ksc = $('aiKeysSyncChk');
+    if (ksc) ksc.addEventListener('change', async function () {
+      try {
+        var S = (typeof window !== 'undefined') ? window.TaskfloSync : null;
+        if (!S || !S.getPrefs) return;
+        var p = await S.getPrefs();
+        p.aiKeys = ksc.checked;
+        await S.setPrefs(p);
+        if (ksc.checked) {
+          say('🔑 مزامنة المفاتيح شغالة — هتترفع مع حسابك');
+          try { await S.pushSecrets(); } catch (e) { say('⚠️ تعذر الرفع الفوري: ' + String((e && e.message) || e).slice(0, 100)); }
+        } else {
+          say('🔑 مزامنة المفاتيح وقفت — المفاتيح على الجهاز ده بس');
+        }
+        refreshStatus();
+      } catch (e) {}
     });
     refreshStatus();
   }

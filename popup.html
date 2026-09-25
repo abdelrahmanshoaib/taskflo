@@ -1235,7 +1235,8 @@
   <div class="acc-card">
     <div class="section-label">✨ ذكاء اصطناعي (متعدد — تبديل تلقائي)</div>
     <div class="acc-status" id="aiLastUsed">...</div>
-    <div class="acc-hint">المفاتيح محفوظة <b>على جهازك فقط</b> — لا تُرفع للسحابة ولا تدخل النسخ الاحتياطي. لو مزود عطل، التاني يرد تلقائياً بنفس السياق.</div>
+    <div class="acc-hint">المفاتيح بتتحفظ مع <b>حسابك السحابي</b> (خاصة بيك فقط) وتظهر على أجهزتك تلقائياً — ومتدخلش ملفات النسخ الاحتياطي. لو مزود عطل، التاني يرد تلقائياً بنفس السياق.</div>
+    <label class="check-line"><input type="checkbox" id="aiKeysSyncChk" checked /> 🔑 مزامنة المفاتيح مع الحساب (اطفيها لو عايزها على الجهاز ده بس)</label>
     <div class="form-group">
       <label class="form-label">🔀 ترتيب التجربة</label>
       <select class="form-select" id="aiOrderSelect">
@@ -1268,7 +1269,7 @@
     </div>
     <div class="form-group">
       <label class="form-label">الموديل</label>
-      <input class="form-input" id="aiModelInputGroq" dir="ltr" placeholder="llama-3.3-70b-versatile" autocomplete="off" />
+      <input class="form-input" id="aiModelInputGroq" dir="ltr" placeholder="openai/gpt-oss-20b" autocomplete="off" />
     </div>
     <div class="acc-row">
       <button class="mini-btn go" id="btnAiSaveGroq" style="flex:1">💾 حفظ المفتاح</button>

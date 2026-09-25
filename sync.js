@@ -5,7 +5,9 @@
 (function () {
   const SESS_KEY = 'tfSession';
   const PREF_KEY = 'tfSyncPrefs';
+  const KEYS_META_KEY = 'aiKeysMeta';
   let pushTimer = null;
+  let secretsPushTimer = null;
 
   function cfg() {
     return window.TASKFLO_FIREBASE || {};
@@ -111,6 +113,122 @@
       try { chrome.storage.local.set({ [PREF_KEY]: p }, () => resolve()); }
       catch (e) { resolve(); }
     });
+  }
+
+  // ─── AI keys sync (separate doc, user asked: keys follow the account) ───
+  // Doc: users/{uid}/data/ai  { payload: {providers, order}, updatedAt }
+  // - Uploads ONLY when local keys changed (dirty flag) — a fresh device with
+  //   empty keys never pushes blanks over the cloud copy.
+  // - Downloads when cloud is newer. Toggle: prefs.aiKeys (default ON).
+  // - Privacy: owner-only doc (firestore.rules). File/clipboard backups NEVER
+  //   include keys (backup.js KEYS list untouched).
+  // - SECURITY HONESTY: keys sit in your private Firestore doc. Anyone with
+  //   access to your Firebase console can read them. No fake encryption.
+  function aiSecretsPath(uid) {
+    const c = cfg();
+    return 'https://firestore.googleapis.com/v1/projects/' + c.projectId +
+      '/databases/(default)/documents/users/' + encodeURIComponent(uid) + '/data/ai';
+  }
+  function getKeysMeta() {
+    return new Promise((resolve) => {
+      try {
+        chrome.storage.local.get([KEYS_META_KEY], (r) => resolve((r && r[KEYS_META_KEY]) || { updatedAt: '', dirty: false }));
+      } catch (e) { resolve({ updatedAt: '', dirty: false }); }
+    });
+  }
+  function setKeysMeta(m) {
+    return new Promise((resolve) => {
+      try { chrome.storage.local.set({ [KEYS_META_KEY]: m }, () => resolve()); }
+      catch (e) { resolve(); }
+    });
+  }
+  async function keysSyncOn() {
+    try {
+      const p = await getPrefs();
+      return p.aiKeys !== false;
+    } catch (e) { return true; }
+  }
+  async function setSecretsDirty() {
+    try {
+      const m = await getKeysMeta();
+      m.dirty = true;
+      await setKeysMeta(m);
+    } catch (e) {}
+  }
+  async function pushSecrets() {
+    if (!(await keysSyncOn())) return 'off';
+    const s = await validSession();
+    await requireActiveSub();
+    const meta = await getKeysMeta();
+    if (!meta.dirty) return 'clean';
+    const stored = await new Promise((resolve) => {
+      try { chrome.storage.local.get(['aiProviders', 'aiProviderOrder'], (r) => resolve(r || {})); }
+      catch (e) { resolve({}); }
+    });
+    const list = Array.isArray(stored.aiProviders) ? stored.aiProviders : [];
+    const order = Array.isArray(stored.aiProviderOrder) ? stored.aiProviderOrder : [];
+    const updatedAt = new Date().toISOString();
+    const res = await fetch(aiSecretsPath(s.uid), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.idToken },
+      body: JSON.stringify({ fields: {
+        payload: { stringValue: JSON.stringify({ providers: list, order }).slice(0, 200000) },
+        updatedAt: { stringValue: updatedAt }
+      } })
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error('فشل رفع المفاتيح: ' + ((j && j.error && j.error.message) || res.status));
+    }
+    await setKeysMeta({ updatedAt, dirty: false });
+    return updatedAt;
+  }
+  async function pullSecrets() {
+    if (!(await keysSyncOn())) return 'off';
+    const s = await validSession();
+    await requireActiveSub();
+    const res = await fetch(aiSecretsPath(s.uid), {
+      headers: { Authorization: 'Bearer ' + s.idToken }
+    });
+    if (res.status === 404) return 'no-cloud';
+    if (!res.ok) throw new Error('فشل تنزيل المفاتيح: ' + res.status);
+    const j = await res.json();
+    const fields = (j && j.fields) || {};
+    const payload = fields.payload && fields.payload.stringValue;
+    const updatedAt = (fields.updatedAt && fields.updatedAt.stringValue) || '';
+    if (!payload) throw new Error('نسخة المفاتيح السحابية فاضية');
+    const meta = await getKeysMeta();
+    if (updatedAt && meta.updatedAt && updatedAt <= meta.updatedAt) return 'up-to-date';
+    let obj;
+    try { obj = JSON.parse(payload); } catch (e) { throw new Error('نسخة المفاتيح السحابية تالفة'); }
+    if (!obj || !Array.isArray(obj.providers)) throw new Error('نسخة المفاتيح السحابية تالفة');
+    const cleanProviders = obj.providers
+      .filter((p) => p && typeof p.id === 'string')
+      .map((p) => ({ id: p.id, key: typeof p.key === 'string' ? p.key : '', model: typeof p.model === 'string' ? p.model : '', on: p.on !== false }));
+    const cleanOrder = Array.isArray(obj.order) ? obj.order.filter((id) => typeof id === 'string') : [];
+    await new Promise((resolve, reject) => {
+      try {
+        chrome.storage.local.set({ aiProviders: cleanProviders, aiProviderOrder: cleanOrder }, () => resolve());
+      } catch (e) { reject(e); }
+    });
+    await setKeysMeta({ updatedAt: updatedAt || new Date().toISOString(), dirty: false });
+    try {
+      if (typeof window !== 'undefined' && window.TaskfloAI && window.TaskfloAI.refreshStatus) window.TaskfloAI.refreshStatus();
+    } catch (e) {}
+    return 'pulled';
+  }
+  function scheduleSecretsPush() {
+    clearTimeout(secretsPushTimer);
+    secretsPushTimer = setTimeout(async () => {
+      try {
+        const prefs = await getPrefs();
+        if (prefs.auto === false) return;
+        const sess = await getSession();
+        if (!sess) return;
+        await pushSecrets();
+        if (typeof renderAccount === 'function') { try { renderAccount(); } catch (_) {} }
+      } catch (e) { /* silent: user can sync manually */ }
+    }, 2500);
   }
 
   async function authCall(mode, email, password) {
@@ -335,11 +453,18 @@
       const j = await res.json();
       const cloudAt = (j.fields && j.fields.updatedAt && j.fields.updatedAt.stringValue) || '';
       const lastSync = prefs.lastSyncAt || '';
+      let mainResult = 'up-to-date';
       if (cloudAt && cloudAt > lastSync) {
         await pullNow();
-        return 'pulled';
+        mainResult = 'pulled';
       }
-      return 'up-to-date';
+      // AI keys ride along: download newer cloud keys, upload dirty local keys.
+      try { await pullSecrets(); } catch (_) {}
+      try {
+        const km = await getKeysMeta();
+        if (km && km.dirty) await pushSecrets();
+      } catch (_) {}
+      return mainResult;
     } catch (e) { return 'error:' + e.message; }
   }
 
@@ -412,6 +537,7 @@
   window.TaskfloSync = {
     isConfigured, getSession, getPrefs, setPrefs, isAdmin,
     signUp, signIn, signInWithGoogle, signOut, sendReset, pushNow, pullNow, schedulePush, syncOnStart, diagnoseCloud,
-    getSubStatus, writeHeartbeat
+    getSubStatus, writeHeartbeat,
+    setSecretsDirty, pushSecrets, pullSecrets, scheduleSecretsPush
   };
 })();

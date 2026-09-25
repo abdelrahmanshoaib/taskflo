@@ -494,12 +494,13 @@
       const r = await window.TaskfloProviders.callChat({
         system: systemPrompt(ctx, persona),
         messages: hist.concat([{ role: 'user', parts: [{ text }] }]),
-        maxTokens: 350, temperature: 0.8
+        maxTokens: 800, temperature: 0.8
       });
       setHeadProvider(r.provider);
       const reply = r.text;
       const visible = String(reply || '').replace(/```task[\s\S]*?```/g, '').trim() || 'تمام 👍';
       botSay(visible);
+      if (r.note) botSay(String(r.note).slice(0, 140));
       chatBlip();
       const blocks = parseTaskBlocks(reply || '');
       for (const b of blocks.slice(0, 3)) {

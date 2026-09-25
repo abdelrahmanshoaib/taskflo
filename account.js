@@ -87,6 +87,7 @@
         await S.signUp(email(), pass());
         say('🎉 اتعمل الحساب! جاري رفع داتاك ☁️⬆️');
         try { await S.pushNow(); } catch (e) { say('✅ الحساب جاهز لكن الرفع فشل: ' + e.message); }
+        try { await S.pushSecrets(); } catch (_) {}
         renderAccount();
       } catch (e) { say('❌ ' + e.message); }
     });
@@ -136,7 +137,7 @@
       renderAccount();
     });
     if ($('btnPush')) $('btnPush').addEventListener('click', async () => {
-      try { say('⏳ جاري الرفع ☁️⬆️...'); await S.pushNow(); say('✅ اترفعت نسختك للسحابة'); }
+      try { say('⏳ جاري الرفع ☁️⬆️...'); await S.pushNow(); try { await S.pushSecrets(); } catch (_) {} say('✅ اترفعت نسختك للسحابة'); }
       catch (e) { say('❌ ' + e.message); }
       renderAccount();
     });
@@ -144,8 +145,10 @@
       try {
         say('⏳ جاري التنزيل ☁️⬇️...');
         await S.pullNow();
+        let keysWarn = '';
+        try { await S.pullSecrets(); } catch (e) { keysWarn = ' (⚠️ المفاتيح: ' + e.message + ')'; }
         if (typeof renderAll === 'function') renderAll();
-        say('✅ نزلت أحدث نسخة من السحابة');
+        say('✅ نزلت أحدث نسخة من السحابة' + keysWarn);
       } catch (e) { say('❌ ' + e.message); }
       renderAccount();
     });
