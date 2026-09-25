@@ -18,7 +18,7 @@
 
   var PROVIDERS = {
     gemini: { name: 'Gemini', icon: '✨', defaultModel: 'gemini-3.6-flash', keyHint: 'AIza...', keyUrl: 'aistudio.google.com', minGapMs: 5000 },
-    grok: { name: 'Grok', icon: '⚡', defaultModel: 'grok-4', keyHint: 'xai-...', keyUrl: 'console.x.ai', minGapMs: 1000 }
+    groq: { name: 'Groq', icon: '⚡', defaultModel: 'llama-3.3-70b-versatile', keyHint: 'gsk_...', keyUrl: 'console.groq.com', minGapMs: 1000 }
   };
   var LIST_KEY = 'aiProviders';
   var ORDER_KEY = 'aiProviderOrder';
@@ -50,26 +50,39 @@
   }
 
   // One-time migration: legacy geminiKey/geminiModel → providers list.
+  // Also normalizes the old xAI 'grok' entry (wrong provider) into 'groq'
+  // with an EMPTY key — xAI keys don't work on Groq, user must paste gsk_ key.
   async function migrate() {
     var s = await storeGet([LIST_KEY, ORDER_KEY, 'geminiKey', 'geminiModel']);
-    if (Array.isArray(s[LIST_KEY]) && s[LIST_KEY].length) return s[LIST_KEY];
-    var list = [
+    if (Array.isArray(s[LIST_KEY]) && s[LIST_KEY].length) {
+      var changed = false;
+      var list = s[LIST_KEY].map(function (p) {
+        if (p.id === 'grok') { changed = true; return { id: 'groq', key: '', model: PROVIDERS.groq.defaultModel, on: p.on !== false }; }
+        return p;
+      });
+      if (!list.some(function (p) { return p.id === 'groq'; })) { list.push({ id: 'groq', key: '', model: PROVIDERS.groq.defaultModel, on: true }); changed = true; }
+      var ord = Array.isArray(s[ORDER_KEY]) ? s[ORDER_KEY].map(function (id) { return id === 'grok' ? 'groq' : id; }) : [];
+      if (JSON.stringify(ord) !== JSON.stringify(s[ORDER_KEY])) changed = true;
+      if (changed) await storeSet({ [LIST_KEY]: list, [ORDER_KEY]: ord.length ? ord : ['gemini', 'groq'] });
+      return list;
+    }
+    var fresh = [
       { id: 'gemini', key: s.geminiKey || '', model: s.geminiModel || PROVIDERS.gemini.defaultModel, on: true },
-      { id: 'grok', key: '', model: PROVIDERS.grok.defaultModel, on: true }
+      { id: 'groq', key: '', model: PROVIDERS.groq.defaultModel, on: true }
     ];
     var order = (Array.isArray(s[ORDER_KEY]) && s[ORDER_KEY].length)
-      ? s[ORDER_KEY].filter(function (id) { return !!PROVIDERS[id]; })
-      : ['gemini', 'grok'];
-    if (!order.length) order = ['gemini', 'grok'];
-    await storeSet({ [LIST_KEY]: list, [ORDER_KEY]: order });
-    return list;
+      ? s[ORDER_KEY].map(function (id) { return id === 'grok' ? 'groq' : id; }).filter(function (id) { return !!PROVIDERS[id]; })
+      : ['gemini', 'groq'];
+    if (!order.length) order = ['gemini', 'groq'];
+    await storeSet({ [LIST_KEY]: fresh, [ORDER_KEY]: order });
+    return fresh;
   }
 
   // Ordered provider entries (with display meta merged in).
   async function getProviders() {
     var list = await migrate();
     var s = await storeGet([ORDER_KEY]);
-    var order = (Array.isArray(s[ORDER_KEY]) && s[ORDER_KEY].length) ? s[ORDER_KEY] : ['gemini', 'grok'];
+    var order = (Array.isArray(s[ORDER_KEY]) && s[ORDER_KEY].length) ? s[ORDER_KEY] : ['gemini', 'groq'];
     var byId = {};
     list.forEach(function (p) { byId[p.id] = p; });
     return order.filter(function (id) { return !!byId[id]; }).map(function (id) {
@@ -84,7 +97,7 @@
   }
   async function setOrder(order) {
     order = (order || []).filter(function (id) { return !!PROVIDERS[id]; });
-    if (!order.length) order = ['gemini', 'grok'];
+    if (!order.length) order = ['gemini', 'groq'];
     await storeSet({ [ORDER_KEY]: order });
   }
   async function getLastProvider() {
@@ -113,7 +126,7 @@
     if (/quota|RESOURCE_EXHAUSTED|rate.limit|too many/i.test(msg) || /\b429\b/.test(msg)) return 'quota';
     if (/overloaded|high demand|UNAVAILABLE/i.test(msg) || /\b50[023]\b/.test(msg)) return 'overload';
     if (/API_KEY_INVALID|API key not valid|invalid_api_key|Incorrect API key|invalid xai/i.test(msg) || /\b401\b/.test(msg)) return 'key';
-    if (/not found/i.test(msg) || /\b404\b/.test(msg)) return 'model';
+    if (/not found|does not exist/i.test(msg) || /\b404\b/.test(msg)) return 'model';
     if (/network|fetch|timeout|abort|Failed to fetch|Load failed/i.test(msg)) return 'network';
     return 'other';
   }
@@ -130,7 +143,7 @@
   }
   function friendlyAllFailed(notes) {
     var withKey = notes.filter(function (n) { return n.tried; });
-    if (!withKey.length) return '⚠️ حط مفتاح API الأول (Gemini أو Grok) من تاب حسابي ← ذكاء اصطناعي';
+    if (!withKey.length) return '⚠️ حط مفتاح API الأول (Gemini أو Groq) من تاب حسابي ← ذكاء اصطناعي';
     if (withKey.length === 1) return friendly(withKey[0].id, withKey[0].msg);
     return '❌ كل المزودين فشلوا: ' + withKey.map(function (n) {
       return (PROVIDERS[n.id] ? PROVIDERS[n.id].name : n.id) + ' (' + friendly(n.id, n.msg).replace(/^[⏳⚠️🌐❌]+\s*/, '').slice(0, 60) + ')';
@@ -170,7 +183,16 @@
         var j = await postJson(url, { 'Content-Type': 'application/json' }, body);
         var parts = ((((j.candidates || [])[0] || {}).content || {}).parts) || [];
         var txt = partsText(parts);
-        if (!txt) throw new Error('empty response');
+        if (!txt) {
+          // Diagnose WHY: safety block? thinking-only parts? truncated raw?
+          var cand = ((j.candidates || [])[0]) || {};
+          var fr = cand.finishReason || '';
+          var br = '';
+          try { br = (j.promptFeedback && j.promptFeedback.blockReason) || ''; } catch (e2) {}
+          var pkeys = '';
+          try { pkeys = parts.map(function (pp) { return Object.keys(pp || {}).join('+'); }).join(','); } catch (e3) {}
+          throw new Error('empty response [finish=' + (fr || '?') + ' block=' + (br || '-') + ' parts=' + (pkeys || 'none') + ']');
+        }
         return txt;
       } catch (e) {
         lastErr = String((e && e.message) || e);
@@ -182,7 +204,8 @@
     throw new Error(lastErr);
   }
 
-  async function tryGrok(p, req) {
+  // Groq (console.groq.com) — OpenAI-compatible chat completions.
+  async function tryGroq(p, req) {
     var body = {
       model: p.model,
       messages: toOpenAI(req.system, req.messages),
@@ -193,11 +216,11 @@
     var lastErr = 'unknown';
     for (var i = 0; i < 2; i++) {
       try {
-        var j = await postJson('https://api.x.ai/v1/chat/completions',
+        var j = await postJson('https://api.groq.com/openai/v1/chat/completions',
           { 'Content-Type': 'application/json', Authorization: 'Bearer ' + p.key }, body);
-        var txt = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
-        txt = String(txt || '').trim();
-        if (!txt) throw new Error('empty response');
+        var ch = (j && j.choices && j.choices[0]) || {};
+        var txt = String((ch.message && ch.message.content) || '').trim();
+        if (!txt) throw new Error('empty response [finish=' + (ch.finish_reason || '?') + ']');
         return txt;
       } catch (e) {
         lastErr = String((e && e.message) || e);
@@ -232,7 +255,7 @@
       if (gap < need) await sleep(need - gap);
       st.lastAt = Date.now();
       try {
-        var text = p.id === 'grok' ? await tryGrok(p, req) : await tryGemini(p, req);
+        var text = p.id === 'groq' ? await tryGroq(p, req) : await tryGemini(p, req);
         try { await storeSet({ [LAST_KEY]: p.id }); } catch (e) {}
         return { text: text, provider: p.id };
       } catch (e) {
@@ -260,8 +283,8 @@
     if (!key) throw new Error('اكتب المفتاح الأول');
     var t0 = Date.now();
     var p = { id: id, key: key, model: model || def.defaultModel };
-    var text = id === 'grok'
-      ? await tryGrok(p, { system: '', messages: [{ role: 'user', parts: [{ text: 'رد بكلمة واحدة فقط: تم' }] }], maxTokens: 20, temperature: 0 })
+    var text = id === 'groq'
+      ? await tryGroq(p, { system: '', messages: [{ role: 'user', parts: [{ text: 'رد بكلمة واحدة فقط: تم' }] }], maxTokens: 20, temperature: 0 })
       : await tryGemini(p, { system: '', messages: [{ role: 'user', parts: [{ text: 'رد بكلمة واحدة فقط: تم' }] }], maxTokens: 20, temperature: 0 });
     if (!text) throw new Error('رد فارغ — حاول تاني');
     return { ok: true, ms: Date.now() - t0 };

@@ -13,7 +13,7 @@
   function P() { return window.TaskfloProviders; }
   var UI = {
     gemini: { key: 'aiKeyInput', model: 'aiModelInput', save: 'btnAiSave', test: 'btnAiTest', del: 'btnAiDel', status: 'aiKeyStatus', delConfirm: 'مسح مفتاح Gemini من هذا الجهاز؟' },
-    grok: { key: 'aiKeyInputGrok', model: 'aiModelInputGrok', save: 'btnAiSaveGrok', test: 'btnAiTestGrok', del: 'btnAiDelGrok', status: 'aiKeyStatusGrok', delConfirm: 'مسح مفتاح Grok من هذا الجهاز؟' }
+    groq: { key: 'aiKeyInputGroq', model: 'aiModelInputGroq', save: 'btnAiSaveGroq', test: 'btnAiTestGroq', del: 'btnAiDelGroq', status: 'aiKeyStatusGroq', delConfirm: 'مسح مفتاح Groq من هذا الجهاز؟' }
   };
 
   // ── Legacy-compatible accessors (Gemini entry) ──
@@ -35,7 +35,7 @@
   }
   async function enhanceTask(title) {
     var ps = await P().getProviders();
-    if (!ps.some(function (p) { return p.on && p.key; })) throw new Error('حط مفتاح AI الأول من تاب حسابي (Gemini أو Grok)');
+    if (!ps.some(function (p) { return p.on && p.key; })) throw new Error('حط مفتاح AI الأول من تاب حسابي (Gemini أو Groq)');
     var prompt = 'المهمة: "' + String(title).slice(0, 200) + '"\n' +
       'أخرج JSON بهذا الشكل بالضبط (قيم عربية، مفاتيح إنجليزية): ' +
       '{"title":"عنوان محسن قصير","description":"وصف عملي سطرين","subtasks":["خطوة 1","خطوة 2","خطوة 3"],"priority":"urgent|high|medium|low","estMinutes":30,"tags":["وسم"]}';
@@ -91,7 +91,7 @@
       var ord = $( 'aiOrderSelect');
       if (ord) {
         var cur = ps.map(function (p) { return p.id; });
-        ord.value = (cur[0] === 'grok') ? 'grok-first' : 'gemini-first';
+        ord.value = (cur[0] === 'groq') ? 'groq-first' : 'gemini-first';
       }
       var last = $('aiLastUsed');
       if (last) {
@@ -143,12 +143,12 @@
   }
   function bindAI() {
     bindOne('gemini');
-    bindOne('grok');
+    bindOne('groq');
     var ord = $('aiOrderSelect');
     if (ord) ord.addEventListener('change', async function () {
-      await P().setOrder(ord.value === 'grok-first' ? ['grok', 'gemini'] : ['gemini', 'grok']);
+      await P().setOrder(ord.value === 'groq-first' ? ['groq', 'gemini'] : ['gemini', 'groq']);
       refreshStatus();
-      say('🔀 ترتيب التجربة: ' + (ord.value === 'grok-first' ? '⚡ Grok أولاً ثم ✨ Gemini' : '✨ Gemini أولاً ثم ⚡ Grok'));
+      say('🔀 ترتيب التجربة: ' + (ord.value === 'groq-first' ? '⚡ Groq أولاً ثم ✨ Gemini' : '✨ Gemini أولاً ثم ⚡ Groq'));
     });
     refreshStatus();
   }

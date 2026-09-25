@@ -485,7 +485,7 @@
       const data = await storeGet(['tasks', 'settings', 'prayerDone']);
       const ps = await window.TaskfloProviders.getProviders();
       if (!ps.some(p => p.on && p.key)) {
-        botSay('⚠️ حط مفتاح AI الأول من الإكستنشن (تاب حسابي ← ذكاء اصطناعي: Gemini أو Grok) وأنا جاهز.');
+        botSay('⚠️ حط مفتاح AI الأول من الإكستنشن (تاب حسابي ← ذكاء اصطناعي: Gemini أو Groq) وأنا جاهز.');
         return;
       }
       const ctx = buildContext(data);
