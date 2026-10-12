@@ -430,6 +430,8 @@
     await new Promise((resolve, reject) => {
       window.TaskfloBackup.applyBackup(obj, { silent: true }, (err) => err ? reject(new Error(err)) : resolve());
     });
+    // Same-day routines: expire missed occurrences resurrected by the cloud pull.
+    try { if (typeof ensureRoutines === 'function') ensureRoutines(); } catch (_) {}
     const p = await getPrefs();
     p.lastSyncAt = updatedAt || new Date().toISOString();
     p.lastDir = 'down';
