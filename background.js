@@ -119,7 +119,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       const settings = result.settings || {};
       if (settings.overdueNotify === false) return;
       const today = new Date().toISOString().slice(0, 10);
-      const n = tasks.filter(t => !t.done && !t.archived && t.due && t.due < today).length;
+      const n = tasks.filter(t => !t.done && !t.archived && !t.routineId && t.due && t.due < today).length;
       if (n > 0) notify('overdue', '⚠️ مهام متأخرة (' + n + ')', 'راجع لوحة اليوم لتخطيط مهامك.');
     });
   } else if (alarm.name === 'chat_nudge') {
@@ -147,7 +147,7 @@ function composeNudge(tasks, prayerDone, deen, idx) {
     const iso = new Date().toISOString().slice(0, 10); // YYYY-MM-DD for task due
     const open = tasks.filter(t => !t.done);
     const today = open.filter(t => t.due === iso || (t.scheduledAt || '').slice(0, 10) === iso);
-    const overdue = open.filter(t => t.due && t.due < iso);
+    const overdue = open.filter(t => !t.routineId && t.due && t.due < iso);
     const h = new Date().getHours();
     const greet = h < 12 ? 'صباح الإنتاجية ☀️' : h < 18 ? 'يومك ماشي كويس 🌤️' : 'مساء الإنجاز 🌙';
     if (overdue.length) return greet + ' — عندك ' + overdue.length + ' مهمة متأخرة، ابدأ بواحدة دلوقتي: ' + overdue[0].title;

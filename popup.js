@@ -838,7 +838,7 @@ function todayStr(off) {
   if (off) d.setDate(d.getDate() + off);
   return d.toISOString().slice(0, 10);
 }
-function isOverdue(t) { return !t.done && !t.archived && t.due && t.due < todayStr(); }
+function isOverdue(t) { if (t.routineId) return false; return !t.done && !t.archived && t.due && t.due < todayStr(); }
 function isToday(t) { return !t.archived && (t.due === todayStr() || (t.scheduledAt && t.scheduledAt.slice(0, 10) === todayStr())); }
 function fmtMins(mins) {
   mins = Math.round(mins);
@@ -1714,6 +1714,16 @@ function routineDueOn(r, dateK) {
 function ensureRoutines() {
   const t = todayStr();
   let changed = false, spawned = 0;
+  // Same-day routines only: auto-expire missed occurrences so a skipped day never leaks into the next day.
+  tasks.forEach(x => {
+    if (!x.routineId || x.done || x.archived) return;
+    if (x.due && x.due < t) {
+      x.archived = true;
+      try { logActivity(x, 'auto-expired missed routine'); } catch (e) {}
+      try { if (typeof clearReminder === 'function') clearReminder(x.id); } catch (e) {}
+      changed = true;
+    }
+  });
   routines.forEach(r => {
     if (!r.active) return;
     if (r.tapMode || r.kind === 'tap') return; // Tap routines: no auto tasks, manual tap only
