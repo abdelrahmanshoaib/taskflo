@@ -1710,11 +1710,38 @@ function routineDueOn(r, dateK) {
   const every = Math.max(2, Number(r.intervalDays) || 3);
   return diff % every === 0;
 }
-// Generate missing occurrences (no duplicates): active routines, up to today.
+// Generate missing occurrences (no duplicates): active routines, for today only.
 function ensureRoutines() {
   const t = todayStr();
   let changed = false, spawned = 0;
-  // Same-day routines only: auto-expire missed occurrences so a skipped day never leaks into the next day.
+
+  // 1. Deduplicate & cleanup existing routine tasks:
+  // For each routine, ensure at most ONE active (undone) task exists.
+  routines.forEach(r => {
+    if (r.tapMode || r.kind === 'tap') return;
+    const activeForR = tasks.filter(x => x.routineId === r.id && !x.done && !x.archived);
+    if (activeForR.length > 1) {
+      // Keep only the first/newest, auto-archive all older duplicates
+      activeForR.slice(1).forEach(dup => {
+        dup.archived = true;
+        try { logActivity(dup, 'auto-archived duplicate routine task'); } catch (e) {}
+        try { if (typeof clearReminder === 'function') clearReminder(dup.id); } catch (e) {}
+        changed = true;
+      });
+    }
+    // If an active task is from a past date, roll it forward to today!
+    if (activeForR.length > 0) {
+      const mainTask = activeForR[0];
+      if (mainTask.due && mainTask.due < t) {
+        mainTask.due = t;
+        if (r.time) mainTask.reminder = t + 'T' + r.time;
+        try { logActivity(mainTask, 'rolled forward to today'); } catch (e) {}
+        changed = true;
+      }
+    }
+  });
+
+  // Archive any other uncompleted past routine tasks
   tasks.forEach(x => {
     if (!x.routineId || x.done || x.archived) return;
     if (x.due && x.due < t) {
@@ -1724,43 +1751,55 @@ function ensureRoutines() {
       changed = true;
     }
   });
+
+  // 2. Generate task for today ONLY if routine is due today and NO active task exists
   routines.forEach(r => {
     if (!r.active) return;
     if (r.tapMode || r.kind === 'tap') return; // Tap routines: no auto tasks, manual tap only
+
     const skipped = r.skipDates || [];
-    let from = r.lastGenerated ? addDaysK(r.lastGenerated, 1) : null;
-    if (!from) {
-      const anchor = r.anchor || (r.createdAt || '').slice(0, 10) || t;
-      from = addDaysK(anchor, -7) > t ? t : (addDaysK(anchor, -7) < anchor ? anchor : addDaysK(anchor, -7));
-      if (from < anchor) from = anchor;
-      if (diffDays(from, t) > 7) from = addDaysK(t, -7);
+    if (skipped.includes(t)) {
+      r.lastGenerated = t;
+      return;
     }
-    if (from > t) { r.lastGenerated = t; changed = true; return; }
-    let cur = from, guard = 0;
-    while (cur <= t && guard < 32) {
-      guard++;
-      const key = cur;
-      cur = addDaysK(cur, 1);
-      if (!routineDueOn(r, key)) continue;
-      if (skipped.includes(key)) continue;
-      if (tasks.some(x => x.routineId === r.id && x.due === key && !x.archived)) continue;
-      const occ = {
-        id: uid(), title: r.title, description: r.description || '', project: r.project || '',
-        priority: r.priority || 'medium', status: 'todo', done: false, startDate: '', due: key,
-        reminder: r.time ? key + 'T' + r.time : '', repeat: 'none',
-        estMinutes: r.estMinutes || 0, spentSeconds: 0, tags: (r.tags || []).slice(),
-        subtasks: [], planCat: 'should', archived: false, scheduledAt: '',
-        routineId: r.id, note: '', activity: [{ at: new Date().toISOString(), action: 'توليد من روتين 🔁' }],
-        createdAt: new Date().toISOString()
-      };
-      tasks.unshift(occ);
-      if (occ.reminder) setReminder(occ);
-      spawned++;
-      changed = true;
+
+    // Check if the routine is due today
+    if (!routineDueOn(r, t)) {
+      r.lastGenerated = t;
+      return;
     }
-    r.lastGenerated = t;
+
+    // If an active undone task already exists for this routine, DO NOT create a duplicate!
+    const hasActive = tasks.some(x => x.routineId === r.id && !x.done && !x.archived);
+    if (hasActive) {
+      r.lastGenerated = t;
+      return;
+    }
+
+    // If already completed for today, do not duplicate
+    const alreadyDoneToday = tasks.some(x => x.routineId === r.id && x.done && x.due === t && !x.archived);
+    if (alreadyDoneToday) {
+      r.lastGenerated = t;
+      return;
+    }
+
+    // Spawn single occurrence for today
+    const occ = {
+      id: uid(), title: r.title, description: r.description || '', project: r.project || '',
+      priority: r.priority || 'medium', status: 'todo', done: false, startDate: '', due: t,
+      reminder: r.time ? t + 'T' + r.time : '', repeat: 'none',
+      estMinutes: r.estMinutes || 0, spentSeconds: 0, tags: (r.tags || []).slice(),
+      subtasks: [], planCat: 'should', archived: false, scheduledAt: '',
+      routineId: r.id, note: '', activity: [{ at: new Date().toISOString(), action: 'توليد من روتين 🔁' }],
+      createdAt: new Date().toISOString()
+    };
+    tasks.unshift(occ);
+    if (occ.reminder) setReminder(occ);
+    spawned++;
     changed = true;
+    r.lastGenerated = t;
   });
+
   if (changed) { save(); renderAll(); }
   return spawned;
 }
