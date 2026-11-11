@@ -619,7 +619,7 @@ function addHeadacheFromDash() {
     planCat: 'must'
   });
   dashHInput.value = '';
-  toast('🤯 اتسجلت مهمة صداع — يلا نخلص منها في أسرع وقت!');
+  toast('📌 تم تثبيت مهمة الصداع بالأعلى — يلا نخلص منها!');
 }
 if (dashHInput) {
   dashHInput.addEventListener('keydown', e => { if (e.key === 'Enter') addHeadacheFromDash(); });
@@ -909,6 +909,10 @@ function applyTaskFilters(list) {
   }
   out.sort((a, b) => {
     if (!!a.done !== !!b.done) return a.done ? 1 : -1;
+    // PINNED: Active headache tasks stay pinned to the very top
+    if (!a.done && !b.done && !!a.headache !== !!b.headache) {
+      return a.headache ? -1 : 1;
+    }
     if (sortV === 'due') {
       if (a.due && b.due) return a.due.localeCompare(b.due);
       if (a.due) return -1;
@@ -973,10 +977,10 @@ function makeTaskEl(t) {
       ${t.done ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
     </div>
     <div class="task-body">
-      <div class="task-title">${escHtml(t.title)}</div>
+      <div class="task-title">${t.headache && !t.done ? '<span class="pin-peg-icon" title="مهمة صداع مثبتة بالأعلى">📌</span> ' : ''}${escHtml(t.title)}</div>
       ${t.description ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${escHtml(t.description)}</div>` : ''}
       <div class="task-meta">
-        ${t.headache ? '<span class="badge badge-headache" title="تاسك صداع مطلوب إنجازه في أسرع وقت">🤯 صداع</span>' : ''}
+        ${t.headache ? '<span class="badge badge-headache" title="تاسك صداع مثبت بالأعلى"><span class="pin-peg-mini">📌</span> صداع مثبت</span>' : ''}
         ${statusBadge(t)}
         ${priBadge(t)}
         ${t.project ? `<span class="badge badge-project">📁 ${escHtml(t.project)}</span>` : ''}
@@ -993,8 +997,8 @@ function makeTaskEl(t) {
       ${(t.subtasks || []).length ? `<div class="sub-list">${(t.subtasks || []).map(s => `<label class="sub-row${s.done ? ' done' : ''}"><input type="checkbox" data-sub="${s.id}" ${s.done ? 'checked' : ''} /><span>${escHtml(s.title)}</span></label>`).join('')}</div>` : ''}
     </div>
     <div class="task-actions">
-      <button class="task-act-btn headache-btn${t.headache ? ' active' : ''}" data-id="${t.id}" title="${t.headache ? 'إلغاء وسم الصداع' : 'تعليم كتاسك صداع 🤯'}">
-        <span style="font-size:12px;line-height:1">🤯</span>
+      <button class="task-act-btn headache-btn${t.headache ? ' active' : ''}" data-id="${t.id}" title="${t.headache ? 'إلغاء التثبيت كصداع' : 'تثبيت كتاسك صداع 📌'}">
+        <span style="font-size:12px;line-height:1">${t.headache ? '📌' : '🤯'}</span>
       </button>
       <button class="task-act-btn pomo-link" data-id="${t.id}" title="🍅 بومودورو لهذه المهمة">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg>
@@ -1024,10 +1028,10 @@ function makeTaskEl(t) {
   if (hBtn) {
     hBtn.addEventListener('click', () => {
       t.headache = !t.headache;
-      logActivity(t, t.headache ? 'تعليم كتاسك صداع 🤯' : 'إلغاء وسم الصداع');
+      logActivity(t, t.headache ? 'تثبيت كتاسك صداع 📌' : 'إلغاء التثبيت');
       save();
       renderAll();
-      toast(t.headache ? '🤯 اتعلّم كتاسك صداع — اخلص منه بسرعة!' : 'تم إلغاء وسم الصداع');
+      toast(t.headache ? '📌 تم تثبيت المهمة بالأعلى كتاسك صداع!' : 'تم إلغاء التثبيت كصداع');
     });
   }
   const pomoBtn = div.querySelector('.pomo-link');
@@ -1553,12 +1557,12 @@ function renderDashHeadache() {
   openHeadaches.forEach(x => {
     const timeInfo = x.estMinutes ? ' <span class="tag-chip" style="font-size:10px">⏳ ' + fmtMins(x.estMinutes) + '</span>' : '';
     const dueInfo = x.due ? ' <span style="font-size:11px;color:var(--muted)">· ' + x.due + (isOverdue(x) ? ' ⚠️' : '') + '</span>' : '';
-    const r = dashRow('🤯 <b>' + escHtml(x.title) + '</b>' + timeInfo + dueInfo, [
+    const r = dashRow('<span class="pin-peg-mini">📌</span> <b>' + escHtml(x.title) + '</b>' + timeInfo + dueInfo, [
       { label: '✔ إنجاز', go: true, onClick: () => { setTaskDone(x, true); } },
       { label: '🍅 تركيز', onClick: () => startPomoForTask(x.id) },
-      { label: '✕', onClick: () => { x.headache = false; logActivity(x, 'إلغاء وسم الصداع'); save(); renderAll(); toast('تمت إزالة وسم الصداع'); } }
+      { label: '✕ إزالة', onClick: () => { x.headache = false; logActivity(x, 'إلغاء وسم الصداع'); save(); renderAll(); toast('تمت إزالة وسم الصداع'); } }
     ]);
-    r.style.borderRight = '3px solid #f43f5e';
+    r.className = 'dash-row is-pinned-headache';
     container.appendChild(r);
   });
 }
