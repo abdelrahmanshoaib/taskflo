@@ -54,7 +54,11 @@
     const open = tasks.filter(t => !t.done);
     const today = open.filter(t => t.due === iso || (t.scheduledAt || '').slice(0, 10) === iso).slice(0, 10);
     const overdue = open.filter(t => t.due && t.due < iso).slice(0, 10);
+    const headaches = open.filter(t => t.headache).slice(0, 10);
     const lines = [];
+    if (headaches.length) {
+      lines.push('🤯 مهام صداع عاجلة مطلوب إنجازها فوراً (' + headaches.length + '): ' + headaches.map(t => t.title).join('، '));
+    }
     lines.push('مهام اليوم (' + today.length + '): ' + (today.map(t => t.title).join('، ') || 'لا يوجد'));
     lines.push('متأخرة (' + overdue.length + '): ' + (overdue.map(t => t.title).join('، ') || 'لا يوجد'));
     lines.push('إجمالي المفتوحة: ' + open.length);
@@ -116,7 +120,8 @@
       '3) لو طلب إضافة مهمة/مهام: اكتب ردك عادي، ثم أضف كتلة JSON في سطر منفصل لكل مهمة بهذا الشكل بالضبط:\n' +
       '```task {"title":"العنوان","due":"YYYY-MM-DD أو فارغ","priority":"urgent|high|medium|low"}\n' +
       '4) لا تدّعي أفعالاً خارج إضافة المهام (لا إيميلات ولا حجز).\n' +
-      '5) لو سأل عن مهامه استخدم البيانات فوق ولا تخترع مهاماً.';
+      '5) لو سأل عن مهامه استخدم البيانات فوق ولا تخترع مهاماً.\n' +
+      '6) لو المستخدم عنده مهام صداع 🤯، شجعه يبدأ بيها فوراً ويخلص منها عشان يرتاح ويفضي دماغه.';
   }
 
   // ─── Task protocol: ```task {...} blocks → saved into the system ───
@@ -131,7 +136,8 @@
           out.push({
             title: String(o.title).slice(0, 120),
             due: /^\d{4}-\d{2}-\d{2}$/.test(o.due || '') ? o.due : '',
-            priority: ['urgent', 'high', 'medium', 'low'].includes(o.priority) ? o.priority : 'medium'
+            priority: ['urgent', 'high', 'medium', 'low'].includes(o.priority) ? o.priority : 'medium',
+            headache: !!o.headache
           });
         }
       } catch (e) { /* skip malformed block */ }
@@ -141,12 +147,15 @@
   async function addTaskToSystem(t) {
     const r = await storeGet(['tasks']);
     const tasks = Array.isArray(r.tasks) ? r.tasks : [];
+    const isH = !!t.headache || /#صداع|!صداع/i.test(t.title || '');
+    const cleanTitle = (t.title || '').replace(/#[صص]داع|![صص]داع/gi, '').trim() || t.title;
     tasks.unshift({
-      id: uid(), title: t.title, description: '', project: '', priority: t.priority,
+      id: uid(), title: cleanTitle, description: '', project: '', priority: t.priority,
       status: 'todo', done: false, startDate: '', due: t.due, reminder: '', repeat: 'none',
       estMinutes: 0, spentSeconds: 0, tags: [], subtasks: [], planCat: t.due ? 'should' : 'should',
       archived: false, scheduledAt: '', routineId: '', note: 'من المساعد العائم 🤖',
-      activity: [{ at: new Date().toISOString(), action: 'إضافة عبر الشات العائم' }],
+      headache: isH,
+      activity: [{ at: new Date().toISOString(), action: 'إضافة عبر الشات العائم' + (isH ? ' (صداع 🤯)' : '') }],
       createdAt: new Date().toISOString()
     });
     await storeSet({ tasks });

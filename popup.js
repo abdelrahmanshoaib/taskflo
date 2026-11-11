@@ -85,6 +85,7 @@ function migrate() {
     if (!Array.isArray(n.activity)) n.activity = [];
     if (n.scheduledAt === undefined) n.scheduledAt = '';
     if (n.routineId === undefined) n.routineId = '';
+    if (n.headache === undefined) n.headache = false;
     if (!n.createdAt) n.createdAt = new Date().toISOString();
     return n;
   });
@@ -603,6 +604,41 @@ if (dashQ) {
   dashQ.addEventListener('keydown', e => { if (e.key === 'Enter') dashAdd(); });
   document.getElementById('dashQuickAddBtn').addEventListener('click', dashAdd);
 }
+// Dashboard headache quick add + instant focus
+const dashHInput = document.getElementById('dashHeadacheInput');
+const dashHAddBtn = document.getElementById('dashHeadacheAddBtn');
+function addHeadacheFromDash() {
+  if (!dashHInput) return;
+  const val = dashHInput.value.trim();
+  if (!val) return;
+  addTask({
+    title: val,
+    headache: true,
+    priority: 'urgent',
+    due: todayStr(),
+    planCat: 'must'
+  });
+  dashHInput.value = '';
+  toast('🤯 اتسجلت مهمة صداع — يلا نخلص منها في أسرع وقت!');
+}
+if (dashHInput) {
+  dashHInput.addEventListener('keydown', e => { if (e.key === 'Enter') addHeadacheFromDash(); });
+}
+if (dashHAddBtn) {
+  dashHAddBtn.addEventListener('click', addHeadacheFromDash);
+}
+const dashHFocusBtn = document.getElementById('dashHeadacheFocusBtn');
+if (dashHFocusBtn) {
+  dashHFocusBtn.addEventListener('click', () => {
+    const firstH = tasks.find(x => x.headache && !x.done && !x.archived);
+    if (firstH) {
+      startPomoForTask(firstH.id);
+      toast('🍅 بدأ التركيز لإنجاز: ' + firstH.title);
+    } else {
+      toast('لا توجد مهام صداع معلقة');
+    }
+  });
+}
 
 // ─── Modal ───────────────────────────────────────────
 document.getElementById('btnAddTask').addEventListener('click', openModal);
@@ -631,6 +667,7 @@ function openModal(taskData) {
   g('modalTags').value = taskData && taskData.tags ? taskData.tags.join('، ') : '';
   g('modalSubs').value = taskData && taskData.subtasks ? taskData.subtasks.map(s => (s.done ? '[x] ' : '') + s.title).join('\n') : '';
   g('modalNote').value = taskData && taskData.note ? taskData.note : '';
+  if (g('modalHeadache')) g('modalHeadache').checked = !!(taskData && taskData.headache);
   document.getElementById('taskModal').classList.add('open');
   setTimeout(() => g('modalTitle').focus(), 50);
 }
@@ -666,7 +703,8 @@ function saveModal() {
     estMinutes: Math.max(0, parseInt(g('modalEst').value, 10) || 0),
     tags: g('modalTags').value.split(/[،,]/).map(s => s.trim()).filter(Boolean),
     subtasks: subs,
-    note: g('modalNote').value
+    note: g('modalNote').value,
+    headache: !!(g('modalHeadache') && g('modalHeadache').checked)
   };
   data.done = (data.status === 'completed');
   if (editId) {
@@ -707,12 +745,17 @@ function logActivity(t, action) {
   if (t.activity.length > 20) t.activity.length = 20;
 }
 function addTask(data) {
+  const isH = !!(data && data.headache) || (data && data.title && /#صداع|!صداع/i.test(data.title));
+  const rawTitle = (data && data.title) ? data.title : '';
+  const cleanTitle = rawTitle.replace(/#[صص]داع|![صص]داع/gi, '').trim() || rawTitle;
   const task = Object.assign(
-    { id: uid(), done: false, status: 'todo', description: '', tags: [], subtasks: [], estMinutes: 0, spentSeconds: 0, startDate: '', planCat: 'should', repeat: 'none', archived: false, activity: [], scheduledAt: '', createdAt: new Date().toISOString() },
+    { id: uid(), done: false, status: 'todo', description: '', tags: [], subtasks: [], estMinutes: 0, spentSeconds: 0, startDate: '', planCat: 'should', repeat: 'none', archived: false, activity: [], scheduledAt: '', routineId: '', headache: isH, createdAt: new Date().toISOString() },
     data || {}
   );
+  if (isH) task.headache = true;
+  if (cleanTitle) task.title = cleanTitle;
   task.done = (task.status === 'completed') || !!task.done;
-  logActivity(task, 'إنشاء المهمة');
+  logActivity(task, 'إنشاء المهمة' + (task.headache ? ' (صداع 🤯)' : ''));
   tasks.unshift(task);
   if (task.reminder) setReminder(task);
   save();
@@ -725,6 +768,9 @@ function setTaskDone(t, done) {
   t.status = done ? 'completed' : (t.status === 'completed' ? 'todo' : t.status);
   logActivity(t, done ? 'إنجاز المهمة' : 'إعادة فتح المهمة');
   if (done && t.routineId) updateRoutineStreak(t);
+  if (done && t.headache) {
+    toast('🎉 تخلصت من الصداع! عاش يا بطل 🚀');
+  }
   if (done && t.repeat && t.repeat !== 'none' && t.due) {
     // Recurring: spawn next occurrence (no duplicates of the same one)
     const nxt = new Date(t.due + 'T12:00:00');
@@ -851,6 +897,7 @@ function applyTaskFilters(list) {
   else if (currentFilter === 'done') out = out.filter(t => t.done && !t.archived);
   else if (currentFilter === 'high') out = out.filter(t => (t.priority === 'high' || t.priority === 'urgent') && !t.archived);
   else if (currentFilter === 'overdue') out = out.filter(isOverdue);
+  else if (currentFilter === 'headache') out = out.filter(t => t.headache && !t.archived);
   else if (currentFilter === 'archived') out = out.filter(t => t.archived);
   else out = out.filter(t => !t.archived);
   if (fStatusV) out = out.filter(t => t.status === fStatusV);
@@ -920,7 +967,7 @@ function renderTasks() {
 
 function makeTaskEl(t) {
   const div = document.createElement('div');
-  div.className = 'task-item' + (t.done ? ' done' : '');
+  div.className = 'task-item' + (t.done ? ' done' : '') + (t.headache && !t.done ? ' is-headache' : '');
   div.innerHTML = `
     <div class="task-check" data-id="${t.id}">
       ${t.done ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
@@ -929,6 +976,7 @@ function makeTaskEl(t) {
       <div class="task-title">${escHtml(t.title)}</div>
       ${t.description ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${escHtml(t.description)}</div>` : ''}
       <div class="task-meta">
+        ${t.headache ? '<span class="badge badge-headache" title="تاسك صداع مطلوب إنجازه في أسرع وقت">🤯 صداع</span>' : ''}
         ${statusBadge(t)}
         ${priBadge(t)}
         ${t.project ? `<span class="badge badge-project">📁 ${escHtml(t.project)}</span>` : ''}
@@ -945,6 +993,9 @@ function makeTaskEl(t) {
       ${(t.subtasks || []).length ? `<div class="sub-list">${(t.subtasks || []).map(s => `<label class="sub-row${s.done ? ' done' : ''}"><input type="checkbox" data-sub="${s.id}" ${s.done ? 'checked' : ''} /><span>${escHtml(s.title)}</span></label>`).join('')}</div>` : ''}
     </div>
     <div class="task-actions">
+      <button class="task-act-btn headache-btn${t.headache ? ' active' : ''}" data-id="${t.id}" title="${t.headache ? 'إلغاء وسم الصداع' : 'تعليم كتاسك صداع 🤯'}">
+        <span style="font-size:12px;line-height:1">🤯</span>
+      </button>
       <button class="task-act-btn pomo-link" data-id="${t.id}" title="🍅 بومودورو لهذه المهمة">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg>
       </button>
@@ -969,6 +1020,16 @@ function makeTaskEl(t) {
   div.querySelector('.edit-btn').addEventListener('click', () => openModal(t));
   div.querySelector('.dup-btn').addEventListener('click', () => duplicateTask(t.id));
   div.querySelector('.arch-btn').addEventListener('click', () => archiveTask(t.id, !t.archived));
+  const hBtn = div.querySelector('.headache-btn');
+  if (hBtn) {
+    hBtn.addEventListener('click', () => {
+      t.headache = !t.headache;
+      logActivity(t, t.headache ? 'تعليم كتاسك صداع 🤯' : 'إلغاء وسم الصداع');
+      save();
+      renderAll();
+      toast(t.headache ? '🤯 اتعلّم كتاسك صداع — اخلص منه بسرعة!' : 'تم إلغاء وسم الصداع');
+    });
+  }
   const pomoBtn = div.querySelector('.pomo-link');
   if (pomoBtn) pomoBtn.addEventListener('click', () => startPomoForTask(t.id));
   const schedBtn = div.querySelector('.sched-link');
@@ -1006,7 +1067,7 @@ function renderTable() {
     row.innerHTML = `
       <span class="tr-title">
         <span class="status-dot" style="background:${dotColor}"></span>
-        ${escHtml(t.title)}${t.status === 'blocked' ? ' ⛔' : ''}${t.status === 'inprogress' ? ' 🚧' : ''}
+        ${escHtml(t.title)}${t.headache ? ' 🤯' : ''}${t.status === 'blocked' ? ' ⛔' : ''}${t.status === 'inprogress' ? ' 🚧' : ''}
       </span>
       <span style="color:var(--muted);font-size:11px">${escHtml(t.project || '—')}</span>
       <span style="color:var(--muted);font-size:11px">${t.due || '—'}</span>
@@ -1420,6 +1481,8 @@ function renderDashboard() {
       { label: 'غداً', onClick: () => { x.due = todayStr(1); logActivity(x, 'تأجيل للغد'); save(); renderAll(); } }
     ]));
   });
+  // Headache tasks (Eat That Frog / Urgent nuisance)
+  renderDashHeadache();
   // Plan by category
   const plan = document.getElementById('dashPlan');
   plan.innerHTML = '';
@@ -1465,6 +1528,39 @@ function renderDashboard() {
     ]));
   });
   void allOpen; void doneToday;
+}
+
+function renderDashHeadache() {
+  const container = document.getElementById('dashHeadacheList');
+  if (!container) return;
+  container.innerHTML = '';
+  const openHeadaches = tasks.filter(x => x.headache && !x.done && !x.archived);
+  const countEl = document.getElementById('dashHeadacheCount');
+  if (countEl) {
+    countEl.textContent = openHeadaches.length;
+    countEl.style.display = openHeadaches.length ? 'inline-block' : 'none';
+  }
+  const focusBtn = document.getElementById('dashHeadacheFocusBtn');
+  if (focusBtn) {
+    focusBtn.style.display = openHeadaches.length ? '' : 'none';
+  }
+
+  if (!openHeadaches.length) {
+    container.appendChild(dashRow('💆‍♂️ <span style="font-size:12px;color:var(--muted)">مفيش أي تاسكات صداع حالياً — دماغك رايقة ويومك هادي! ✨</span>'));
+    return;
+  }
+
+  openHeadaches.forEach(x => {
+    const timeInfo = x.estMinutes ? ' <span class="tag-chip" style="font-size:10px">⏳ ' + fmtMins(x.estMinutes) + '</span>' : '';
+    const dueInfo = x.due ? ' <span style="font-size:11px;color:var(--muted)">· ' + x.due + (isOverdue(x) ? ' ⚠️' : '') + '</span>' : '';
+    const r = dashRow('🤯 <b>' + escHtml(x.title) + '</b>' + timeInfo + dueInfo, [
+      { label: '✔ إنجاز', go: true, onClick: () => { setTaskDone(x, true); } },
+      { label: '🍅 تركيز', onClick: () => startPomoForTask(x.id) },
+      { label: '✕', onClick: () => { x.headache = false; logActivity(x, 'إلغاء وسم الصداع'); save(); renderAll(); toast('تمت إزالة وسم الصداع'); } }
+    ]);
+    r.style.borderRight = '3px solid #f43f5e';
+    container.appendChild(r);
+  });
 }
 
 // ─── Calendar + Appointments ───────────────────────────

@@ -330,6 +330,103 @@
   .badge-done-ok { background: var(--success-bg); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.25); }
   .badge-urgent { background: linear-gradient(135deg, #ef4444, #b91c1c); color: #fff; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3); }
   .badge-arch { background: var(--surface); color: var(--faint); border: 1px dashed var(--border); }
+  .badge-headache { background: linear-gradient(135deg, #f43f5e, #be123c); color: #fff; font-weight: 700; box-shadow: 0 2px 6px rgba(244, 63, 94, 0.35); }
+  .task-item.is-headache {
+    border-right: 3px solid #f43f5e;
+    background: linear-gradient(90deg, rgba(244, 63, 94, 0.04), transparent);
+  }
+  .task-act-btn.headache-btn.active {
+    color: #f43f5e;
+    border-color: rgba(244, 63, 94, 0.4);
+    background: rgba(244, 63, 94, 0.12);
+  }
+
+  /* ── Dashboard Headache Tasks Card ── */
+  .dash-headache-card {
+    background: var(--surface2);
+    border: 1px solid rgba(244, 63, 94, 0.35);
+    border-radius: var(--radius-lg);
+    padding: 12px 14px;
+    margin-top: 10px;
+    box-shadow: 0 4px 16px rgba(244, 63, 94, 0.08);
+    position: relative;
+    overflow: hidden;
+    transition: all var(--transition);
+  }
+  .dash-headache-card::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 4px;
+    background: linear-gradient(180deg, #f43f5e, #fb7185);
+    border-radius: 4px;
+  }
+  .dash-headache-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 9px;
+  }
+  .headache-icon {
+    font-size: 20px;
+    animation: pulse-headache 2s infinite ease-in-out;
+    display: inline-block;
+  }
+  @keyframes pulse-headache {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15) rotate(4deg); }
+  }
+  .badge-headache-pill {
+    background: linear-gradient(135deg, #f43f5e, #be123c);
+    color: #fff;
+    font-size: 10.5px;
+    font-weight: 800;
+    padding: 1px 7px;
+    border-radius: 99px;
+    display: inline-block;
+    min-width: 18px;
+    text-align: center;
+  }
+  .dash-headache-quick {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .dash-headache-quick input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 12px;
+    color: var(--text);
+    font-family: inherit;
+    outline: none;
+    transition: border-color var(--transition);
+  }
+  .dash-headache-quick input:focus {
+    border-color: #f43f5e;
+  }
+  .btn-headache-add {
+    background: linear-gradient(135deg, #f43f5e, #be123c);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity var(--transition), transform var(--transition);
+  }
+  .btn-headache-add:hover {
+    opacity: 0.92;
+    transform: translateY(-1px);
+  }
+  .btn-headache-add:active {
+    transform: translateY(0);
+  }
   .tag-chip {
     padding: 2px 8px; border-radius: 99px; font-size: 10.5px; font-weight: 500;
     background: var(--surface); border: 1px solid var(--border); color: var(--muted);
@@ -855,6 +952,29 @@
     <div class="progress-line" style="margin-bottom:8px"><div id="dashProgressFill" style="width:0%"></div></div>
     <div class="dash-list" id="dashOverdue"></div>
   </div>
+
+  <!-- ── سكشن تاسكات الصداع ── -->
+  <div class="dash-headache-card" id="dashHeadacheCard">
+    <div class="dash-headache-header">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="headache-icon">🤯</span>
+        <div>
+          <div style="font-weight:800;font-size:13px;display:flex;align-items:center;gap:6px">
+            <span>تاسكات الصداع</span>
+            <span class="badge-headache-pill" id="dashHeadacheCount">0</span>
+          </div>
+          <div style="font-size:10.5px;color:var(--muted)">المهام التقيلة والمزعجة — اخلص منها في أسرع وقت وارتاح!</div>
+        </div>
+      </div>
+      <button class="mini-btn go" id="dashHeadacheFocusBtn" style="font-size:11px;padding:3px 9px;background:linear-gradient(135deg, #f43f5e, #be123c);color:#fff" title="بدء تركيز على أول مهمة صداع">⚡ إنجاز فوري</button>
+    </div>
+    <div class="dash-headache-quick">
+      <input type="text" id="dashHeadacheInput" placeholder="أضف تاسك صداع سريع عايز تخلص منه... (Enter)" />
+      <button class="btn-headache-add" id="dashHeadacheAddBtn">➕ إضافة</button>
+    </div>
+    <div class="dash-list" id="dashHeadacheList"></div>
+  </div>
+
   <div>
     <div class="section-label">📌 خطة اليوم (Must / Should / Could / Scheduled)</div>
     <div class="dash-list" id="dashPlan"></div>
@@ -888,6 +1008,7 @@
     <button class="filter-chip" data-filter="done">منجزة</button>
     <button class="filter-chip" data-filter="high">أولوية</button>
     <button class="filter-chip" data-filter="overdue">متأخرة</button>
+    <button class="filter-chip" data-filter="headache">🤯 صداع</button>
     <button class="filter-chip" data-filter="archived">مؤرشفة</button>
   </div>
   <div class="adv-row">
@@ -1466,6 +1587,12 @@
     <div class="form-group">
       <label class="form-label">ملاحظات</label>
       <input class="form-input" id="modalNote" placeholder="ملاحظة اختيارية..." />
+    </div>
+    <div class="form-group">
+      <label class="headache-toggle-label" style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 12px;background:rgba(244,63,94,0.08);border:1px solid rgba(244,63,94,0.25);border-radius:10px">
+        <input type="checkbox" id="modalHeadache" style="width:16px;height:16px;accent-color:#e11d48;cursor:pointer" />
+        <span style="font-weight:700;font-size:12px;color:var(--text)">🤯 تاسك صداع (عايز أخلص منه في أسرع وقت)</span>
+      </label>
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" id="modalCancel">إلغاء</button>
